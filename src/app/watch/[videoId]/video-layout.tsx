@@ -12,7 +12,6 @@ import { ChatPanel, type ChatPanelHandle } from "@/components/chat-panel"
 import { tokenizeWithVocab } from "@/lib/vocab-highlight"
 import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
 import type { TranscriptSegment as Segment } from "@/app/api/transcript/[videoId]/route"
-import type { WordDefinition } from "@/app/api/definition/[word]/route"
 import { cn } from "@/lib/utils"
 
 type Tab = "transcript" | "notes" | "chat"
@@ -29,7 +28,6 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([])
-  const [vocabDefinitions, setVocabDefinitions] = useState<Map<string, WordDefinition>>(new Map())
   const [activeIdx, setActiveIdx] = useState(-1)
   const [activeTab, setActiveTab] = useState<Tab>("transcript")
   const [popup, setPopup] = useState<{
@@ -68,26 +66,6 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   useEffect(() => {
     fetchTranscript()
   }, [fetchTranscript])
-
-  useEffect(() => {
-    if (!vocabTerms.length) return
-    setVocabDefinitions(new Map())
-    Promise.all(
-      vocabTerms.map(async (t) => {
-        const lower = t.term.toLowerCase()
-        try {
-          const r = await fetch(`/api/definition/${encodeURIComponent(lower)}`)
-          const data: WordDefinition & { error?: string } = await r.json()
-          if (data.error) return null
-          return [lower, data] as [string, WordDefinition]
-        } catch {
-          return null
-        }
-      })
-    ).then((entries) => {
-      setVocabDefinitions(new Map(entries.filter((e): e is [string, WordDefinition] => e !== null)))
-    })
-  }, [vocabTerms])
 
   useEffect(() => {
     if (!isReady || !segments.length) return
@@ -133,21 +111,17 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 
   // Sort AI vocab: words before phrases
   const mergedVocab = useMemo(() => vocabTerms
-    .map((t) => {
-      const lower = t.term.toLowerCase()
-      const def = vocabDefinitions.get(lower)
-      return {
-        key: lower,
-        content: t.term,
-        zh_definition: t.definition_zh,
-        pos: t.pos as string | undefined,
-        isPhrase: t.term.includes(" "),
-        example: def?.example ?? null,
-        zh_example: def?.zh_example ?? null,
-      }
-    })
+    .map((t) => ({
+      key: t.term.toLowerCase(),
+      content: t.term,
+      zh_definition: t.definition_zh,
+      pos: t.pos as string | undefined,
+      isPhrase: t.term.includes(" "),
+      example: t.example ?? null,
+      zh_example: t.zh_example ?? null,
+    }))
     .sort((a, b) => Number(a.isPhrase) - Number(b.isPhrase))
-  , [vocabTerms, vocabDefinitions])
+  , [vocabTerms])
 
   const transcriptText = useMemo(() => segments.map((s) => s.text).join(" "), [segments])
 

@@ -17,7 +17,7 @@ export function tokenizeWithVocab(
         return {
           type: "vocab" as const,
           text: token,
-          term: { term: token, definition_zh: "", level: getWordLevel(token) ?? cefrFallback, pos: "" },
+          term: { term: token, definition_zh: "", level: getWordLevel(token) ?? cefrFallback, pos: "", example: "", zh_example: "" },
         }
       }
       return { type: "text" as const, text: token }
