@@ -1,15 +1,18 @@
 "use client"
 
-import { type CefrLevel, shouldHighlight, tokenize } from "@/data/cefr-words"
+import { tokenizeWithVocab } from "@/lib/vocab-highlight"
+import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
+import type { CefrLevel } from "@/data/cefr-words"
 import { cn } from "@/lib/utils"
 
 interface Props {
   text: string
   startMs: number
   isActive: boolean
-  userLevel: CefrLevel
+  vocabTerms: VocabTerm[]
+  cefrLevel: CefrLevel
   onSeek: (startMs: number) => void
-  onWordClick: (word: string, rect: DOMRect) => void
+  onWordClick: (term: string, vocabTerm: VocabTerm, rect: DOMRect) => void
 }
 
 function formatTime(ms: number): string {
@@ -21,8 +24,8 @@ function formatTime(ms: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`
 }
 
-export function TranscriptSegment({ text, startMs, isActive, userLevel, onSeek, onWordClick }: Props) {
-  const tokens = tokenize(text)
+export function TranscriptSegment({ text, startMs, isActive, vocabTerms, cefrLevel, onSeek, onWordClick }: Props) {
+  const tokens = tokenizeWithVocab(text, vocabTerms, cefrLevel)
 
   return (
     <div
@@ -32,38 +35,34 @@ export function TranscriptSegment({ text, startMs, isActive, userLevel, onSeek, 
         isActive ? "bg-stone-100" : "hover:bg-stone-50"
       )}
     >
-      {/* Timestamp — click to seek */}
       <button
-        onClick={() => onSeek(startMs)}
+        onClick={(e) => { e.stopPropagation(); onSeek(startMs) }}
         className="shrink-0 mt-0.5 text-[11px] text-stone-400 hover:text-stone-900 font-mono tabular-nums transition-colors"
       >
         {formatTime(startMs)}
       </button>
 
-      {/* Text with per-word highlighting */}
-      <p
-        className={cn(
-          "text-sm leading-relaxed",
-          isActive ? "text-stone-900 font-medium" : "text-stone-500"
-        )}
-      >
+      <p className={cn(
+        "text-sm leading-relaxed",
+        isActive ? "text-stone-900 font-medium" : "text-stone-500"
+      )}>
         {tokens.map((token, i) => {
-          const isWord = /^[a-zA-Z'-]+$/.test(token)
-          if (!isWord) return <span key={i}>{token}</span>
-
-          const highlight = shouldHighlight(token, userLevel)
-          if (!highlight) return <span key={i}>{token}</span>
-
+          if (token.type === "text") return <span key={i}>{token.text}</span>
           return (
             <button
               key={i}
               onClick={(e) => {
                 e.stopPropagation()
-                onWordClick(token, (e.currentTarget as HTMLElement).getBoundingClientRect())
+                onWordClick(token.text, token.term, (e.currentTarget as HTMLElement).getBoundingClientRect())
               }}
-              className="relative inline underline decoration-dotted decoration-stone-500 text-stone-900 hover:text-stone-700 hover:bg-stone-50 rounded px-0.5 transition-colors"
+              className={cn(
+                "relative inline rounded px-0.5 transition-colors cursor-pointer",
+                token.term.term.includes(" ")
+                  ? "bg-amber-100 text-amber-900 hover:bg-amber-200"
+                  : "bg-blue-100 text-blue-900 hover:bg-blue-200"
+              )}
             >
-              {token}
+              {token.text}
             </button>
           )
         })}

@@ -2,50 +2,50 @@
 
 import { useEffect, useRef, useState } from "react"
 import type { WordDefinition } from "@/app/api/definition/[word]/route"
+import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 
 interface Props {
-  word: string
+  term: string
+  prefilled?: VocabTerm
   anchorRect: DOMRect
   onClose: () => void
 }
 
-type State =
+type DetailState =
   | { status: "loading" }
   | { status: "ok"; data: WordDefinition }
-  | { status: "error"; code: string }
+  | { status: "error" }
 
 const clientCache = new Map<string, WordDefinition>()
 
-export function WordPopup({ word, anchorRect, onClose }: Props) {
+export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const { requireAuth } = useAuth()
-  const [state, setState] = useState<State>({ status: "loading" })
+  const [detail, setDetail] = useState<DetailState>({ status: "loading" })
   const [saved, setSaved] = useState(false)
 
-  // Fetch definition
   useEffect(() => {
-    const lower = word.toLowerCase()
+    const lower = term.toLowerCase()
     if (clientCache.has(lower)) {
-      setState({ status: "ok", data: clientCache.get(lower)! })
+      setDetail({ status: "ok", data: clientCache.get(lower)! })
       return
     }
-    setState({ status: "loading" })
+    setDetail({ status: "loading" })
     fetch(`/api/definition/${encodeURIComponent(lower)}`)
       .then((r) => r.json())
       .then((data: WordDefinition & { error?: string }) => {
         if (data.error) {
-          setState({ status: "error", code: data.error })
+          setDetail({ status: "error" })
         } else {
           clientCache.set(lower, data)
-          setState({ status: "ok", data })
+          setDetail({ status: "ok", data })
         }
       })
-      .catch(() => setState({ status: "error", code: "network" }))
-  }, [word])
+      .catch(() => setDetail({ status: "error" }))
+  }, [term])
 
-  // Close on outside click or Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose() }
     function onDown(e: MouseEvent) {
@@ -59,22 +59,23 @@ export function WordPopup({ word, anchorRect, onClose }: Props) {
     }
   }, [onClose])
 
-  // Position: below the word, nudge left if near right edge
   const style = (() => {
     const popupW = 280
     const gap = 8
     let left = anchorRect.left
     let top = anchorRect.bottom + gap + window.scrollY
-
-    if (left + popupW > window.innerWidth - 16) {
-      left = window.innerWidth - popupW - 16
-    }
-    // If too low, place above
-    if (top + 180 > window.innerHeight + window.scrollY) {
-      top = anchorRect.top - 180 + window.scrollY
-    }
+    if (left + popupW > window.innerWidth - 16) left = window.innerWidth - popupW - 16
+    if (top + 200 > window.innerHeight + window.scrollY) top = anchorRect.top - 200 + window.scrollY
     return { top, left, width: popupW }
   })()
+
+  // Definition text: prefer prefilled (instant), fall back to API result
+  const definitionZh = prefilled?.definition_zh
+    ?? (detail.status === "ok" ? detail.data.zh_definition : null)
+
+  const pos = detail.status === "ok" ? detail.data.pos : null
+  const example = detail.status === "ok" ? detail.data.example : null
+  const zhExample = detail.status === "ok" ? detail.data.zh_example : null
 
   return (
     <div
@@ -85,9 +86,10 @@ export function WordPopup({ word, anchorRect, onClose }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <span className="font-semibold text-stone-900 text-base">{word}</span>
-          {state.status === "ok" && (
-            <span className="ml-2 text-xs text-stone-400">{state.data.pos}</span>
+          <span className="font-semibold text-stone-900 text-base">{term}</span>
+          {pos && <span className="ml-2 text-xs text-stone-400">{pos}</span>}
+          {prefilled && (
+            <span className="ml-2 text-xs text-stone-400 uppercase">{prefilled.level}</span>
           )}
         </div>
         <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors">
@@ -98,38 +100,40 @@ export function WordPopup({ word, anchorRect, onClose }: Props) {
       </div>
 
       {/* Content */}
-      {state.status === "loading" && (
-        <div className="flex items-center gap-2 text-stone-400 py-2">
-          <Spinner />
-          <span>加载中…</span>
-        </div>
-      )}
-
-      {state.status === "error" && (
-        <p className="text-stone-400 py-2">
-          {state.code === "no_api_key"
-            ? "请在 .env.local 中配置 GOOGLE_GENERATIVE_AI_API_KEY"
-            : "释义加载失败，请重试"}
-        </p>
-      )}
-
-      {state.status === "ok" && (
-        <div className="space-y-2">
-          <p className="text-stone-900 font-medium">{state.data.zh_definition}</p>
-          <div className="space-y-0.5">
-            <p className="text-stone-600 italic leading-snug">"{state.data.example}"</p>
-            <p className="text-stone-400 text-xs leading-snug">{state.data.zh_example}</p>
+      <div className="space-y-2">
+        {definitionZh ? (
+          <p className="text-stone-900 font-medium">{definitionZh}</p>
+        ) : detail.status === "loading" ? (
+          <div className="flex items-center gap-2 text-stone-400 py-1">
+            <Spinner />
+            <span>加载中…</span>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-stone-400 py-1">释义加载失败</p>
+        )}
+
+        {example && (
+          <div className="space-y-0.5">
+            <p className="text-stone-600 italic leading-snug">"{example}"</p>
+            {zhExample && <p className="text-stone-400 text-xs leading-snug">{zhExample}</p>}
+          </div>
+        )}
+
+        {!example && detail.status === "loading" && definitionZh && (
+          <div className="flex items-center gap-1.5 text-stone-300 text-xs">
+            <Spinner size="sm" />
+            <span>加载例句…</span>
+          </div>
+        )}
+      </div>
 
       {/* Save button */}
       <button
-        disabled={state.status !== "ok" || saved}
+        disabled={!definitionZh || saved}
         onClick={() => {
-          if (state.status !== "ok") return
+          if (!definitionZh) return
           requireAuth(() => {
-            // TODO Phase 5: insert into saved_items table
+            // TODO: insert into saved_items table
             setSaved(true)
           })
         }}
@@ -137,20 +141,21 @@ export function WordPopup({ word, anchorRect, onClose }: Props) {
           "mt-3 w-full h-8 rounded-md text-xs font-medium transition-colors",
           saved
             ? "bg-stone-100 text-stone-400 cursor-default"
-            : state.status === "ok"
+            : definitionZh
             ? "bg-stone-900 text-white hover:bg-stone-700"
             : "bg-stone-100 text-stone-400 cursor-not-allowed"
         )}
       >
-        {saved ? "已保存 ✓" : "保存到笔记"}
+        {saved ? "已保存 ✓" : "保存到生词本"}
       </button>
     </div>
   )
 }
 
-function Spinner() {
+function Spinner({ size = "md" }: { size?: "sm" | "md" }) {
+  const cls = size === "sm" ? "w-3 h-3" : "w-4 h-4"
   return (
-    <svg className="w-4 h-4 animate-spin text-stone-400" fill="none" viewBox="0 0 24 24">
+    <svg className={cn(cls, "animate-spin text-stone-400")} fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
     </svg>

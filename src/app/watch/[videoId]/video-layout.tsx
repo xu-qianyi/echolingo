@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Languages, MessageSquare, PenLine } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
+import { useRouter } from "next/navigation"
 import { useYouTubePlayer } from "@/hooks/use-youtube-player"
 import { TranscriptSegment } from "@/components/transcript-segment"
 import { WordPopup } from "@/components/word-popup"
-import { shouldHighlight, tokenize, type CefrLevel } from "@/data/cefr-words"
+import { tokenizeWithVocab } from "@/lib/vocab-highlight"
+import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
 import type { TranscriptSegment as Segment } from "@/app/api/transcript/[videoId]/route"
 import { cn } from "@/lib/utils"
 
@@ -17,20 +19,30 @@ const POLL_MS = 250
 
 export function VideoLayout({ videoId }: { videoId: string }) {
   const { t, cefrLevel } = useLanguage()
+  const router = useRouter()
   const { isReady, seekTo, getCurrentTime } = useYouTubePlayer(PLAYER_ID, videoId)
 
   const [segments, setSegments] = useState<Segment[]>([])
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([])
   const [activeIdx, setActiveIdx] = useState(-1)
   const [activeTab, setActiveTab] = useState<Tab>("transcript")
-  const [popup, setPopup] = useState<{ word: string; rect: DOMRect } | null>(null)
+  const [popup, setPopup] = useState<{
+    term: string
+    prefilled?: VocabTerm
+    rect: DOMRect
+  } | null>(null)
 
   const segmentRefs = useRef<(HTMLDivElement | null)[]>([])
   const lastActiveIdx = useRef(-1)
 
-  useEffect(() => {
+  const fetchTranscript = useCallback(() => {
     setSegments([])
     setTranscriptError(null)
+    setIsLoading(true)
+    setVocabTerms([])
+
     fetch(`/api/transcript/${videoId}?level=${cefrLevel}`)
       .then((r) => r.json())
       .then((data) => {
@@ -38,7 +50,17 @@ export function VideoLayout({ videoId }: { videoId: string }) {
         else setSegments(data.segments)
       })
       .catch(() => setTranscriptError("fetch_failed"))
+      .finally(() => setIsLoading(false))
+
+    fetch(`/api/vocab/${videoId}?level=${cefrLevel}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.terms) setVocabTerms(data.terms) })
+      .catch(() => {/* vocab is optional — fail silently */})
   }, [videoId, cefrLevel])
+
+  useEffect(() => {
+    fetchTranscript()
+  }, [fetchTranscript])
 
   useEffect(() => {
     if (!isReady || !segments.length) return
@@ -57,13 +79,55 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   }, [activeIdx])
 
   const handleSeek = useCallback((ms: number) => seekTo(ms / 1000), [seekTo])
-  const handleWordClick = useCallback((word: string, rect: DOMRect) => setPopup({ word, rect }), [])
+
+  const handleWordClick = useCallback((term: string, vocabTerm: VocabTerm, rect: DOMRect) => {
+    setPopup({ term, prefilled: vocabTerm, rect })
+  }, [])
 
   const currentSeg = activeIdx >= 0 ? segments[activeIdx] : null
   const nextSeg = activeIdx >= 0 ? segments[activeIdx + 1] : null
 
   return (
     <>
+      {/* Full-screen loading overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-5">
+          <div className="w-10 h-10 rounded-full border-[3px] border-stone-200 border-t-stone-500 animate-spin" />
+          <div className="flex flex-col items-center gap-1 text-center">
+            <p className="text-[15px] font-semibold text-stone-800">正在加载视频工作区</p>
+            <p className="text-sm text-stone-400">正在获取字幕...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen error overlay */}
+      {!isLoading && transcriptError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-50">
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-stone-900/5 px-10 py-10 max-w-md w-full mx-4 text-center">
+            <p className="text-lg font-bold text-stone-900 mb-3">无法分析该视频</p>
+            <p className="text-sm text-stone-500 leading-relaxed mb-8">
+              {transcriptError === "no_transcript"
+                ? "该视频没有可用的字幕，可能未开启字幕功能。请换一个有字幕的视频试试。"
+                : "字幕加载失败，请检查网络后重试。"}
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => router.push("/")}
+                className="px-5 py-2 rounded-full text-sm font-medium border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors"
+              >
+                返回首页
+              </button>
+              <button
+                onClick={fetchTranscript}
+                className="px-5 py-2 rounded-full text-sm font-medium bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+              >
+                重试
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-0 gap-6 px-20 py-8 bg-stone-100/60">
 
         {/* ── Left column ── */}
@@ -76,7 +140,6 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 
           {/* Learning display */}
           <div className="flex flex-col flex-1 min-h-0 rounded-2xl bg-white shadow-sm ring-1 ring-stone-900/5 overflow-hidden">
-            {/* Current + next sentence */}
             <div className="flex-1 overflow-hidden flex flex-col justify-center px-8 py-6 gap-5">
               {!segments.length ? (
                 <p className="text-stone-300 text-xl">{t.watch.transcriptLoading}</p>
@@ -84,19 +147,18 @@ export function VideoLayout({ videoId }: { videoId: string }) {
                 <p className="text-stone-300 text-xl">播放视频开始学习</p>
               ) : (
                 <>
-                  {/* Current sentence — large */}
                   <LearningText
                     text={currentSeg?.text ?? ""}
-                    userLevel={cefrLevel}
+                    vocabTerms={vocabTerms}
+                    cefrLevel={cefrLevel}
                     onWordClick={handleWordClick}
                     size="current"
                   />
-
-                  {/* Next sentence — faint */}
                   {nextSeg && (
                     <LearningText
                       text={nextSeg.text}
-                      userLevel={cefrLevel}
+                      vocabTerms={vocabTerms}
+                      cefrLevel={cefrLevel}
                       onWordClick={handleWordClick}
                       size="next"
                     />
@@ -128,11 +190,9 @@ export function VideoLayout({ videoId }: { videoId: string }) {
             </div>
           </div>
 
-          {/* Transcript tab — always mounted so refs work */}
+          {/* Transcript tab */}
           <div className={cn("flex-1 overflow-y-auto px-2 py-2", activeTab !== "transcript" && "hidden")}>
-            {transcriptError ? (
-              <TranscriptError error={transcriptError} />
-            ) : !segments.length ? (
+            {!segments.length ? (
               <p className="text-sm text-stone-400 px-2 py-4">{t.watch.transcriptLoading}</p>
             ) : (
               <div className="space-y-0.5">
@@ -142,7 +202,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
                       text={seg.text}
                       startMs={seg.startMs}
                       isActive={activeIdx === i}
-                      userLevel={cefrLevel}
+                      vocabTerms={vocabTerms}
+                      cefrLevel={cefrLevel}
                       onSeek={handleSeek}
                       onWordClick={handleWordClick}
                     />
@@ -152,7 +213,7 @@ export function VideoLayout({ videoId }: { videoId: string }) {
             )}
           </div>
 
-          {/* Notes tab */}
+          {/* 生词本 tab */}
           <div className={cn("flex-1 overflow-y-auto p-4", activeTab !== "notes" && "hidden")}>
             <p className="text-sm text-stone-400">{t.watch.notesLoading}</p>
           </div>
@@ -166,7 +227,12 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       </div>
 
       {popup && (
-        <WordPopup word={popup.word} anchorRect={popup.rect} onClose={() => setPopup(null)} />
+        <WordPopup
+          term={popup.term}
+          prefilled={popup.prefilled}
+          anchorRect={popup.rect}
+          onClose={() => setPopup(null)}
+        />
       )}
     </>
   )
@@ -175,46 +241,45 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 // ── Learning display text ────────────────────────────────────────────────────
 
 function LearningText({
-  text, userLevel, onWordClick, size,
+  text, vocabTerms, cefrLevel, onWordClick, size,
 }: {
   text: string
-  userLevel: CefrLevel
-  onWordClick: (word: string, rect: DOMRect) => void
+  vocabTerms: VocabTerm[]
+  cefrLevel: import("@/data/cefr-words").CefrLevel
+  onWordClick: (term: string, vocabTerm: VocabTerm, rect: DOMRect) => void
   size: "current" | "next"
 }) {
-  const tokens = tokenize(text)
+  const tokens = tokenizeWithVocab(text, vocabTerms, cefrLevel)
   const isCurrent = size === "current"
 
   return (
     <p className={cn(
       "leading-relaxed transition-all duration-300",
-      isCurrent
-        ? "text-3xl font-medium text-stone-900"
-        : "text-xl text-stone-300"
+      isCurrent ? "text-3xl font-medium text-stone-900" : "text-xl text-stone-300"
     )}>
       {tokens.map((token, i) => {
-        const isWord = /^[a-zA-Z'-]+$/.test(token)
-        if (!isWord) return <span key={i}>{token}</span>
-
-        const highlight = shouldHighlight(token, userLevel)
-        if (!highlight) return <span key={i}>{token}</span>
-
+        if (token.type === "text") return <span key={i}>{token.text}</span>
         return (
           <button
             key={i}
             onClick={(e) => {
               if (!isCurrent) return
               e.stopPropagation()
-              onWordClick(token, (e.currentTarget as HTMLElement).getBoundingClientRect())
+              onWordClick(token.text, token.term, (e.currentTarget as HTMLElement).getBoundingClientRect())
             }}
             className={cn(
               "relative inline-block rounded-md transition-colors",
               isCurrent
-                ? "bg-stone-100 text-stone-900 px-1 mx-0.5 hover:bg-stone-200 cursor-pointer underline decoration-dotted decoration-stone-400 underline-offset-4"
+                ? cn(
+                    "px-1 mx-0.5 cursor-pointer rounded",
+                    token.term.term.includes(" ")
+                      ? "bg-amber-100 text-amber-900 hover:bg-amber-200"
+                      : "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                  )
                 : "text-stone-300 cursor-default"
             )}
           >
-            {token}
+            {token.text}
           </button>
         )
       })}
@@ -240,14 +305,3 @@ function TabBtn({ active, onClick, children }: {
   )
 }
 
-function TranscriptError({ error }: { error: string }) {
-  return (
-    <div className="py-6 px-2 text-center">
-      <p className="text-sm text-stone-500">
-        {error === "no_transcript"
-          ? "该视频没有可用的字幕，请换一个视频试试。"
-          : "字幕加载失败，请刷新重试。"}
-      </p>
-    </div>
-  )
-}
