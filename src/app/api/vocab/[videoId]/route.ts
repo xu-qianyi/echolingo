@@ -8,6 +8,7 @@ export interface VocabTerm {
   term: string
   definition_zh: string
   level: string
+  pos: string
 }
 
 const schema = z.object({
@@ -15,6 +16,7 @@ const schema = z.object({
     term: z.string().describe("the exact word or phrase as it appears in the transcript, lowercase"),
     definition_zh: z.string().describe("concise Chinese definition, 4-12 characters"),
     level: z.enum(["a1", "a2", "b1", "b2", "c1"]).describe("CEFR difficulty level of this term"),
+    pos: z.string().describe("part of speech abbreviation: n. / v. / adj. / adv. / prep. / phr. (use phr. for multi-word phrases)"),
   })),
 })
 

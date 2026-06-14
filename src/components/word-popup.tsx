@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react"
 import type { WordDefinition } from "@/app/api/definition/[word]/route"
 import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
-import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -22,9 +21,7 @@ const clientCache = new Map<string, WordDefinition>()
 
 export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const { requireAuth } = useAuth()
   const [detail, setDetail] = useState<DetailState>({ status: "loading" })
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     const lower = term.toLowerCase()
@@ -69,7 +66,6 @@ export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
     return { top, left, width: popupW }
   })()
 
-  // Definition text: prefer prefilled (instant), fall back to API result
   const definitionZh = prefilled?.definition_zh
     ?? (detail.status === "ok" ? detail.data.zh_definition : null)
 
@@ -88,9 +84,6 @@ export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
         <div>
           <span className="font-semibold text-stone-900 text-base">{term}</span>
           {pos && <span className="ml-2 text-xs text-stone-400">{pos}</span>}
-          {prefilled && (
-            <span className="ml-2 text-xs text-stone-400 uppercase">{prefilled.level}</span>
-          )}
         </div>
         <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -126,28 +119,6 @@ export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
           </div>
         )}
       </div>
-
-      {/* Save button */}
-      <button
-        disabled={!definitionZh || saved}
-        onClick={() => {
-          if (!definitionZh) return
-          requireAuth(() => {
-            // TODO: insert into saved_items table
-            setSaved(true)
-          })
-        }}
-        className={cn(
-          "mt-3 w-full h-8 rounded-md text-xs font-medium transition-colors",
-          saved
-            ? "bg-stone-100 text-stone-400 cursor-default"
-            : definitionZh
-            ? "bg-stone-900 text-white hover:bg-stone-700"
-            : "bg-stone-100 text-stone-400 cursor-not-allowed"
-        )}
-      >
-        {saved ? "已保存 ✓" : "保存到生词本"}
-      </button>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Languages, MessageSquare, PenLine } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 import { useRouter } from "next/navigation"
@@ -56,6 +56,7 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       .then((r) => r.json())
       .then((data) => { if (data.terms) setVocabTerms(data.terms) })
       .catch(() => {/* vocab is optional — fail silently */})
+
   }, [videoId, cefrLevel])
 
   useEffect(() => {
@@ -86,6 +87,19 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 
   const currentSeg = activeIdx >= 0 ? segments[activeIdx] : null
   const nextSeg = activeIdx >= 0 ? segments[activeIdx + 1] : null
+
+  // Sort AI vocab: words before phrases
+  const mergedVocab = useMemo(() => vocabTerms
+    .map((t) => ({
+      key: t.term.toLowerCase(),
+      content: t.term,
+      zh_definition: t.definition_zh,
+      pos: t.pos as string | undefined,
+      isPhrase: t.term.includes(" "),
+      example: null as string | null,
+    }))
+    .sort((a, b) => Number(a.isPhrase) - Number(b.isPhrase))
+  , [vocabTerms])
 
   return (
     <>
@@ -214,8 +228,15 @@ export function VideoLayout({ videoId }: { videoId: string }) {
           </div>
 
           {/* 生词本 tab */}
-          <div className={cn("flex-1 overflow-y-auto p-4", activeTab !== "notes" && "hidden")}>
-            <p className="text-sm text-stone-400">{t.watch.notesLoading}</p>
+          <div className={cn("flex-1 overflow-y-auto py-2", activeTab !== "notes" && "hidden")}>
+            {mergedVocab.length === 0 ? (
+              <p className="text-sm text-stone-400 px-4 py-4">正在分析生词…</p>
+            ) : (
+              <>
+                <VocabSection title="Vocabulary" items={mergedVocab.filter((i) => !i.isPhrase)} />
+                <VocabSection title="Short Phrases" items={mergedVocab.filter((i) => i.isPhrase)} />
+              </>
+            )}
           </div>
 
           {/* Chat tab */}
@@ -288,6 +309,40 @@ function LearningText({
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+type VocabListItem = {
+  key: string
+  content: string
+  zh_definition: string | null
+  pos: string | undefined
+  isPhrase: boolean
+  example: string | null
+}
+
+function VocabSection({ title, items }: { title: string; items: VocabListItem[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="mb-1">
+      <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-stone-400">{title}</p>
+      {items.map((item) => (
+        <div key={item.key} className="px-3 py-2 rounded-lg hover:bg-stone-50">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-sm font-medium text-stone-900">{item.content}</span>
+            {item.pos && (
+              <span className="text-xs text-stone-400 italic">{item.pos}</span>
+            )}
+            {item.zh_definition && (
+              <span className="text-xs text-stone-500">{item.zh_definition}</span>
+            )}
+          </div>
+          {item.example && (
+            <p className="text-xs text-stone-400 italic leading-snug mt-0.5 truncate">{item.example}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function TabBtn({ active, onClick, children }: {
   active: boolean; onClick: () => void; children: React.ReactNode

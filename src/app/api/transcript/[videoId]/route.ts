@@ -1,6 +1,7 @@
 import { YoutubeTranscript } from "youtube-transcript"
 import { NextResponse } from "next/server"
 import type { CefrLevel } from "@/data/cefr-words"
+import { createClient } from "@/lib/supabase/server"
 
 export interface TranscriptSegment {
   text: string
@@ -195,6 +196,12 @@ export async function GET(req: Request, { params }: Params) {
     const items = splitAtEmbeddedSentences(filtered)
     const grouped = groupIntoSegments(items, level)
     const segments = mergeShortSegments(grouped)
+
+    // Proactively ensure the video row exists so word-save doesn't need to write it
+    createClient().then((supabase) =>
+      supabase.from("videos").upsert({ youtube_id: videoId }, { onConflict: "youtube_id" })
+    ).catch(() => { /* non-critical */ })
+
     return NextResponse.json({ segments })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error"

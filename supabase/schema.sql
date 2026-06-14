@@ -52,8 +52,9 @@ ALTER TABLE user_videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE study_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_items ENABLE ROW LEVEL SECURITY;
 
--- Videos: public read, server-only write (no user policy needed for insert)
+-- Videos: public read; authenticated users can upsert (needed when saving words)
 CREATE POLICY "videos_select" ON videos FOR SELECT USING (true);
+CREATE POLICY "videos_insert" ON videos FOR INSERT TO authenticated WITH CHECK (true);
 
 -- User videos: own rows only
 CREATE POLICY "user_videos_all" ON user_videos
