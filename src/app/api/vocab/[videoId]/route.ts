@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
+import { createClient } from "@/lib/supabase/server"
 
 export interface VocabTerm {
   term: string
@@ -24,7 +25,8 @@ const schema = z.object({
   })),
 })
 
-const cache = new Map<string, VocabTerm[]>()
+// L1: in-process memory cache (fast, resets on restart)
+const memCache = new Map<string, VocabTerm[]>()
 
 const VALID_LEVELS = ["a1", "a2", "b1", "b2", "c1"]
 
@@ -37,10 +39,38 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url)
   const rawLevel = url.searchParams.get("level") ?? "b1"
   const level = VALID_LEVELS.includes(rawLevel) ? rawLevel : "b1"
-
   const cacheKey = `${videoId}:${level}`
-  if (cache.has(cacheKey)) {
-    return NextResponse.json({ terms: cache.get(cacheKey) })
+
+  // L1 hit
+  if (memCache.has(cacheKey)) {
+    return NextResponse.json({ terms: memCache.get(cacheKey) })
+  }
+
+  // L2: database (persists across restarts and deployments)
+  try {
+    const supabase = await createClient()
+    const { data: video } = await supabase
+      .from("videos")
+      .select("id")
+      .eq("youtube_id", videoId)
+      .single()
+
+    if (video) {
+      const { data: note } = await supabase
+        .from("study_notes")
+        .select("content")
+        .eq("video_id", video.id)
+        .eq("cefr_level", level)
+        .single()
+
+      if (note?.content) {
+        const terms = (note.content as { terms: VocabTerm[] }).terms
+        memCache.set(cacheKey, terms)
+        return NextResponse.json({ terms })
+      }
+    }
+  } catch {
+    // DB lookup non-critical — fall through to AI
   }
 
   const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
@@ -75,7 +105,24 @@ Transcript:
 ${fullText.slice(0, 8000)}`,
     })
 
-    cache.set(cacheKey, object.terms)
+    memCache.set(cacheKey, object.terms)
+
+    // Persist to DB (non-critical)
+    createClient().then(async (supabase) => {
+      const { data: video } = await supabase
+        .from("videos")
+        .select("id")
+        .eq("youtube_id", videoId)
+        .single()
+      if (!video) return
+      await supabase
+        .from("study_notes")
+        .upsert(
+          { video_id: video.id, cefr_level: level, content: { terms: object.terms } },
+          { onConflict: "video_id,cefr_level" }
+        )
+    }).catch(() => { /* non-critical */ })
+
     return NextResponse.json({ terms: object.terms })
   } catch (err) {
     console.error("[vocab]", err)

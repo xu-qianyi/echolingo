@@ -61,9 +61,13 @@ CREATE POLICY "user_videos_all" ON user_videos
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Study notes: any authenticated user can read; server inserts (service role)
+-- Study notes: any authenticated user can read and upsert (vocab data is not user-specific)
 CREATE POLICY "study_notes_select" ON study_notes
   FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "study_notes_insert" ON study_notes
+  FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "study_notes_update" ON study_notes
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 -- Saved items: own rows only
 CREATE POLICY "saved_items_all" ON saved_items
