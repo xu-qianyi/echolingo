@@ -28,6 +28,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([])
+  const [vocabError, setVocabError] = useState(false)
+  const [vocabLoading, setVocabLoading] = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
   const [activeTab, setActiveTab] = useState<Tab>("transcript")
   const [popup, setPopup] = useState<{
@@ -46,6 +48,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
     setTranscriptError(null)
     setIsLoading(true)
     setVocabTerms([])
+    setVocabError(false)
+    setVocabLoading(true)
 
     fetch(`/api/transcript/${videoId}?level=${cefrLevel}`)
       .then((r) => r.json())
@@ -58,8 +62,12 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 
     fetch(`/api/vocab/${videoId}?level=${cefrLevel}`)
       .then((r) => r.json())
-      .then((data) => { if (data.terms) setVocabTerms(data.terms) })
-      .catch(() => {/* vocab is optional — fail silently */})
+      .then((data) => {
+        if (data.terms) setVocabTerms(data.terms)
+        else setVocabError(true)
+      })
+      .catch(() => setVocabError(true))
+      .finally(() => setVocabLoading(false))
 
   }, [videoId, cefrLevel])
 
@@ -253,8 +261,24 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 
           {/* 生词本 tab */}
           <div className={cn("flex-1 overflow-y-auto py-2", activeTab !== "notes" && "hidden")}>
-            {mergedVocab.length === 0 ? (
-              <p className="text-sm text-stone-400 px-4 py-4">正在分析生词…</p>
+            {vocabError ? (
+              <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+                <p className="text-sm text-stone-500">生词分析失败，可能是 API 配额已用完</p>
+                <button
+                  onClick={fetchTranscript}
+                  className="px-4 py-1.5 rounded-full text-xs font-medium border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors"
+                >
+                  重新分析
+                </button>
+              </div>
+            ) : vocabLoading ? (
+              <div className="flex items-center gap-2.5 px-4 py-4 text-sm text-stone-400">
+                <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                正在分析生词…
+              </div>
             ) : (
               <>
                 <VocabSection title="Vocabulary" items={mergedVocab.filter((i) => !i.isPhrase)} />

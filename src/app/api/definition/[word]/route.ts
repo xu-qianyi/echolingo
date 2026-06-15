@@ -42,6 +42,7 @@ export async function GET(_req: Request, { params }: Params) {
     const google = createGoogleGenerativeAI({ apiKey })
     const { object } = await generateObject({
       model: google("gemini-2.5-flash"),
+      maxRetries: 0,
       schema,
       prompt: `You are a concise English-Chinese dictionary for Chinese learners of English.
 Define the word "${lower}" with:

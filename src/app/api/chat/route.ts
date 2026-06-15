@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     const google = createGoogleGenerativeAI({ apiKey })
     const { text } = await generateText({
       model: google("gemini-2.5-flash"),
+      maxRetries: 0,
       system: `You are a helpful AI assistant built into an English learning app for Chinese speakers.
 The user is learning English by watching videos. Help them understand the content.
 - When asked for translation, translate English to natural Chinese.

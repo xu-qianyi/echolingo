@@ -58,6 +58,7 @@ export async function GET(req: Request, { params }: Params) {
     const google = createGoogleGenerativeAI({ apiKey })
     const { object } = await generateObject({
       model: google("gemini-2.5-flash"),
+      maxRetries: 0,
       schema,
       prompt: `You are an English teacher for Chinese learners at ${level.toUpperCase()} level.
 
