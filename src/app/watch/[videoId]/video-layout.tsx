@@ -10,6 +10,7 @@ import { WordPopup } from "@/components/word-popup"
 import { SelectionPopup } from "@/components/selection-popup"
 import { ChatPanel, type ChatPanelHandle } from "@/components/chat-panel"
 import { tokenizeWithVocab } from "@/lib/vocab-highlight"
+import { getUserApiKey, setUserApiKey, withUserApiKey } from "@/lib/user-api-key"
 import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
 import type { TranscriptSegment as Segment } from "@/app/api/transcript/[videoId]/route"
 import { cn } from "@/lib/utils"
@@ -30,6 +31,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([])
   const [vocabError, setVocabError] = useState(false)
   const [vocabLoading, setVocabLoading] = useState(false)
+  const [showKeyInput, setShowKeyInput] = useState(false)
+  const [keyInputValue, setKeyInputValue] = useState(() => getUserApiKey() ?? "")
   const [activeIdx, setActiveIdx] = useState(-1)
   const [activeTab, setActiveTab] = useState<Tab>("transcript")
   const [popup, setPopup] = useState<{
@@ -43,14 +46,24 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   const lastActiveIdx = useRef(-1)
   const chatPanelRef = useRef<ChatPanelHandle>(null)
 
+  const fetchVocab = useCallback(() => {
+    setVocabTerms([])
+    setVocabError(false)
+    setVocabLoading(true)
+    fetch(`/api/vocab/${videoId}?level=${cefrLevel}`, { headers: withUserApiKey() })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.terms) setVocabTerms(data.terms)
+        else setVocabError(true)
+      })
+      .catch(() => setVocabError(true))
+      .finally(() => setVocabLoading(false))
+  }, [videoId, cefrLevel])
+
   const fetchTranscript = useCallback(() => {
     setSegments([])
     setTranscriptError(null)
     setIsLoading(true)
-    setVocabTerms([])
-    setVocabError(false)
-    setVocabLoading(true)
-
     fetch(`/api/transcript/${videoId}?level=${cefrLevel}`)
       .then((r) => r.json())
       .then((data) => {
@@ -59,17 +72,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       })
       .catch(() => setTranscriptError("fetch_failed"))
       .finally(() => setIsLoading(false))
-
-    fetch(`/api/vocab/${videoId}?level=${cefrLevel}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.terms) setVocabTerms(data.terms)
-        else setVocabError(true)
-      })
-      .catch(() => setVocabError(true))
-      .finally(() => setVocabLoading(false))
-
-  }, [videoId, cefrLevel])
+    fetchVocab()
+  }, [videoId, cefrLevel, fetchVocab])
 
   useEffect(() => {
     fetchTranscript()
@@ -262,14 +266,60 @@ export function VideoLayout({ videoId }: { videoId: string }) {
           {/* 生词本 tab */}
           <div className={cn("flex-1 overflow-y-auto py-2", activeTab !== "notes" && "hidden")}>
             {vocabError ? (
-              <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+              <div className="flex flex-col items-center gap-3 px-5 py-8 text-center">
                 <p className="text-sm text-stone-500">生词分析失败，可能是 API 配额已用完</p>
                 <button
-                  onClick={fetchTranscript}
+                  onClick={fetchVocab}
                   className="px-4 py-1.5 rounded-full text-xs font-medium border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
                   重新分析
                 </button>
+
+                <div className="w-full border-t border-stone-100 pt-4 mt-1">
+                  {!showKeyInput ? (
+                    <button
+                      onClick={() => setShowKeyInput(true)}
+                      className="text-xs text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors"
+                    >
+                      使用自己的 Google AI API Key
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs text-stone-400 text-left">粘贴你的 API Key（仅存在本地）</p>
+                      <input
+                        value={keyInputValue}
+                        onChange={(e) => setKeyInputValue(e.target.value)}
+                        placeholder="AIza..."
+                        className="w-full text-xs bg-stone-100 rounded-lg px-3 py-2 outline-none font-mono placeholder:text-stone-300"
+                      />
+                      <button
+                        onClick={() => {
+                          const k = keyInputValue.trim()
+                          if (!k) return
+                          setUserApiKey(k)
+                          setShowKeyInput(false)
+                          fetchVocab()
+                        }}
+                        disabled={!keyInputValue.trim()}
+                        className="w-full py-2 rounded-lg bg-stone-900 text-white text-xs font-medium disabled:opacity-30 hover:bg-stone-700 transition-colors"
+                      >
+                        保存并重试
+                      </button>
+                      <p className="text-[11px] text-stone-400">
+                        从{" "}
+                        <a
+                          href="https://aistudio.google.com/apikey"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2 hover:text-stone-600"
+                        >
+                          Google AI Studio
+                        </a>
+                        {" "}免费获取
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : vocabLoading ? (
               <div className="flex items-center gap-2.5 px-4 py-4 text-sm text-stone-400">

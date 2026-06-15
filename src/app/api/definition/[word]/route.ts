@@ -25,7 +25,7 @@ interface Params {
   params: Promise<{ word: string }>
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
   const { word } = await params
   const lower = word.toLowerCase()
 
@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json(cache.get(lower))
   }
 
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  const apiKey = (req.headers.get("X-User-Api-Key") || process.env.GOOGLE_GENERATIVE_AI_API_KEY)
   if (!apiKey) {
     return NextResponse.json({ error: "no_api_key" }, { status: 503 })
   }

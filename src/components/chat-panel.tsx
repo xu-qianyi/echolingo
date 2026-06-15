@@ -1,6 +1,7 @@
 "use client"
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react"
+import { withUserApiKey } from "@/lib/user-api-key"
 import { Send, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -47,7 +48,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, Props>(({ transcript }, ref
     try {
       const r = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withUserApiKey({ "Content-Type": "application/json" }),
         body: JSON.stringify({ messages: next, transcript }),
       })
       const data = await r.json()

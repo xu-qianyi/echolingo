@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   const { text } = await req.json()
   if (!text) return NextResponse.json({ error: "missing text" }, { status: 400 })
 
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  const apiKey = (req.headers.get("X-User-Api-Key") || process.env.GOOGLE_GENERATIVE_AI_API_KEY)
   if (!apiKey) return NextResponse.json({ error: "no_api_key" }, { status: 503 })
 
   try {

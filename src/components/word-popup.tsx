@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { WordDefinition } from "@/app/api/definition/[word]/route"
 import type { VocabTerm } from "@/app/api/vocab/[videoId]/route"
+import { withUserApiKey } from "@/lib/user-api-key"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -30,7 +31,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
       return
     }
     setDetail({ status: "loading" })
-    fetch(`/api/definition/${encodeURIComponent(lower)}`)
+    fetch(`/api/definition/${encodeURIComponent(lower)}`, { headers: withUserApiKey() })
       .then((r) => r.json())
       .then((data: WordDefinition & { error?: string }) => {
         if (data.error) {
