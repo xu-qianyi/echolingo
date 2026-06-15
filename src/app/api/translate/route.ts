@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try {
     const google = createGoogleGenerativeAI({ apiKey })
     const { object } = await generateObject({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-1.5-flash"),
       schema: z.object({
         translation: z.string().describe("natural Chinese translation of the input text"),
       }),
