@@ -11,6 +11,7 @@ interface Props {
   prefilled?: VocabTerm
   anchorRect: DOMRect
   onClose: () => void
+  youtubeId?: string
 }
 
 type DetailState =
@@ -18,11 +19,14 @@ type DetailState =
   | { status: "ok"; data: WordDefinition }
   | { status: "error" }
 
+type SaveState = "idle" | "saving" | "saved" | "error"
+
 const clientCache = new Map<string, WordDefinition>()
 
-export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
+export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<DetailState>({ status: "loading" })
+  const [saveState, setSaveState] = useState<SaveState>("idle")
 
   useEffect(() => {
     const lower = term.toLowerCase()
@@ -74,6 +78,29 @@ export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
   const example = detail.status === "ok" ? detail.data.example : null
   const zhExample = detail.status === "ok" ? detail.data.zh_example : null
 
+  const handleSave = async () => {
+    if (!youtubeId || saveState === "saving" || saveState === "saved") return
+    setSaveState("saving")
+    try {
+      const r = await fetch("/api/saved-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          youtubeId,
+          content: term,
+          type: term.includes(" ") ? "phrase" : "word",
+          zh_definition: definitionZh ?? undefined,
+          example: example ?? undefined,
+          zh_example: zhExample ?? undefined,
+        }),
+      })
+      const data = await r.json()
+      setSaveState(data.error ? "error" : "saved")
+    } catch {
+      setSaveState("error")
+    }
+  }
+
   return (
     <div
       ref={ref}
@@ -120,6 +147,25 @@ export function WordPopup({ term, prefilled, anchorRect, onClose }: Props) {
           </div>
         )}
       </div>
+
+      {youtubeId && (
+        <div className="mt-3 pt-3 border-t border-stone-100">
+          <button
+            onClick={handleSave}
+            disabled={saveState === "saving" || saveState === "saved"}
+            className={cn(
+              "w-full py-1.5 rounded-lg text-xs font-medium transition-colors",
+              saveState === "saved"
+                ? "bg-stone-100 text-stone-400 cursor-default"
+                : saveState === "error"
+                ? "bg-red-50 text-red-500 hover:bg-red-100"
+                : "bg-stone-900 text-white hover:bg-stone-700 disabled:opacity-50"
+            )}
+          >
+            {saveState === "saved" ? "已加入生词本 ✓" : saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败，重试" : "加入生词本"}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
