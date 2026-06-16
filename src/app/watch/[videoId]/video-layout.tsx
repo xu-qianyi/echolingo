@@ -71,6 +71,7 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   const [hideTranslation, setHideTranslation] = useState(false)
 
   const segmentRefs = useRef<(HTMLDivElement | null)[]>([])
+  const inFlightTranslations = useRef<Set<string>>(new Set())
   const lastActiveIdx = useRef(-1)
   const chatPanelRef = useRef<ChatPanelHandle>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -91,6 +92,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
 
   const fetchTranscript = useCallback(() => {
     setSegments([])
+    setTranslations({})
+    inFlightTranslations.current = new Set()
     setTranscriptError(null)
     setIsLoading(true)
     setSearchOpen(false)
@@ -111,44 +114,36 @@ export function VideoLayout({ videoId }: { videoId: string }) {
     fetchTranscript()
   }, [fetchTranscript])
 
+  // On-demand translation: only translate the segment being played, plus a small
+  // lookahead. The center "learning display" is the sole consumer, and it shows
+  // one segment at a time — so we spend tokens only on what the user actually
+  // watches. Results are cached server-side, so re-watches cost zero tokens.
   useEffect(() => {
-    if (!segments.length) return
-    const unique = [...new Set(segments.map((s) => s.text))]
-    setTranslations({})
+    if (activeIdx < 0 || !segments.length) return
+    const LOOKAHEAD = 3 // current + next 2
+    const wanted = [...new Set(segments.slice(activeIdx, activeIdx + LOOKAHEAD).map((s) => s.text))]
+    const todo = wanted.filter((t) => !(t in translations) && !inFlightTranslations.current.has(t))
+    if (!todo.length) return
 
-    const CHUNK = 20
-    let cancelled = false
-
-    const run = async () => {
-      for (let i = 0; i < unique.length; i += CHUNK) {
-        if (cancelled) return
-        const batch = unique.slice(i, i + CHUNK)
-        try {
-          const r = await fetch("/api/translate-batch", {
-            method: "POST",
-            headers: withUserApiKey({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ texts: batch }),
+    todo.forEach((t) => inFlightTranslations.current.add(t))
+    fetch("/api/translate-batch", {
+      method: "POST",
+      headers: withUserApiKey({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ texts: todo }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.translations) {
+          setTranslations((prev) => {
+            const next = { ...prev }
+            todo.forEach((text, j) => { if (data.translations[j]) next[text] = data.translations[j] })
+            return next
           })
-          const data = await r.json()
-          if (cancelled) return
-          if (data.translations) {
-            setTranslations((prev) => {
-              const next = { ...prev }
-              batch.forEach((text, j) => { if (data.translations[j]) next[text] = data.translations[j] })
-              return next
-            })
-          } else {
-            console.error("[translate-batch] chunk", i, "returned:", data)
-          }
-        } catch (err) {
-          console.error("[translate-batch] chunk", i, "failed:", err)
         }
-      }
-    }
-
-    run()
-    return () => { cancelled = true }
-  }, [segments])
+      })
+      .catch(() => { /* leave untranslated; will retry when revisited */ })
+      .finally(() => { todo.forEach((t) => inFlightTranslations.current.delete(t)) })
+  }, [activeIdx, segments, translations])
 
   useEffect(() => {
     if (!isReady || !segments.length) return
