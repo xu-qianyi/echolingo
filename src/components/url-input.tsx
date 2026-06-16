@@ -65,8 +65,8 @@ export function UrlInput() {
             </button>
           </div>
 
-          {/* Row 2: hint */}
-          <p className="text-xs text-stone-400">粘贴 YouTube 链接即可开始学习</p>
+          {/* Row 2: hint (text removed, height preserved) */}
+          <p className="text-xs text-stone-400" aria-hidden>&nbsp;</p>
         </form>
 
         {/* Drop shadow */}
