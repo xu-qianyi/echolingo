@@ -63,6 +63,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
     rect: DOMRect
   } | null>(null)
   const [selectionPopup, setSelectionPopup] = useState<{ text: string; rect: DOMRect } | null>(null)
+  const [deletedVocabKeys, setDeletedVocabKeys] = useState<Set<string>>(new Set())
+  const [loadingExampleKeys, setLoadingExampleKeys] = useState<Set<string>>(new Set())
 
   const segmentRefs = useRef<(HTMLDivElement | null)[]>([])
   const lastActiveIdx = useRef(-1)
@@ -189,11 +191,42 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       zh_definition: t.definition_zh,
       pos: t.pos as string | undefined,
       isPhrase: t.term.includes(" "),
-      example: t.example ?? null,
-      zh_example: t.zh_example ?? null,
+      example: t.example || null,
+      zh_example: t.zh_example || null,
+      loadingExample: loadingExampleKeys.has(t.term.toLowerCase()),
     }))
     .sort((a, b) => Number(a.isPhrase) - Number(b.isPhrase))
-  , [vocabTerms])
+  , [vocabTerms, loadingExampleKeys])
+
+  const filteredVocab = useMemo(
+    () => mergedVocab.filter((i) => !deletedVocabKeys.has(i.key)),
+    [mergedVocab, deletedVocabKeys]
+  )
+
+  const handleDeleteVocab = useCallback((key: string) => {
+    setDeletedVocabKeys((prev) => new Set([...prev, key]))
+  }, [])
+
+  const handleVocabSaved = useCallback((newTerm: VocabTerm) => {
+    setVocabTerms((prev) => {
+      if (prev.some((t) => t.term.toLowerCase() === newTerm.term.toLowerCase())) return prev
+      return [...prev, newTerm]
+    })
+    if (!newTerm.example) {
+      setLoadingExampleKeys((prev) => new Set([...prev, newTerm.term.toLowerCase()]))
+    }
+  }, [])
+
+  const handleExampleReady = useCallback((updatedTerm: VocabTerm) => {
+    setVocabTerms((prev) =>
+      prev.map((t) => t.term.toLowerCase() === updatedTerm.term.toLowerCase() ? updatedTerm : t)
+    )
+    setLoadingExampleKeys((prev) => {
+      const next = new Set(prev)
+      next.delete(updatedTerm.term.toLowerCase())
+      return next
+    })
+  }, [])
 
   const transcriptText = useMemo(() => segments.map((s) => s.text).join(" "), [segments])
 
@@ -396,8 +429,8 @@ export function VideoLayout({ videoId }: { videoId: string }) {
               </div>
             ) : (
               <>
-                <VocabSection title="Vocabulary" items={mergedVocab.filter((i) => !i.isPhrase)} />
-                <VocabSection title="Short Phrases" items={mergedVocab.filter((i) => i.isPhrase)} />
+                <VocabSection title="Vocabulary" items={filteredVocab.filter((i) => !i.isPhrase)} onDelete={handleDeleteVocab} />
+                <VocabSection title="Short Phrases" items={filteredVocab.filter((i) => i.isPhrase)} onDelete={handleDeleteVocab} />
               </>
             )}
           </div>
@@ -415,8 +448,17 @@ export function VideoLayout({ videoId }: { videoId: string }) {
           term={popup.term}
           prefilled={popup.prefilled}
           anchorRect={popup.rect}
-          onClose={() => setPopup(null)}
+          onClose={() => {
+            setLoadingExampleKeys((prev) => {
+              const next = new Set(prev)
+              next.delete(popup.term.toLowerCase())
+              return next
+            })
+            setPopup(null)
+          }}
           youtubeId={videoId}
+          onSaved={handleVocabSaved}
+          onExampleReady={handleExampleReady}
         />
       )}
 
@@ -483,34 +525,111 @@ type VocabListItem = {
   isPhrase: boolean
   example: string | null
   zh_example: string | null
+  loadingExample: boolean
 }
 
-function VocabSection({ title, items }: { title: string; items: VocabListItem[] }) {
+function VocabSection({ title, items, onDelete }: { title: string; items: VocabListItem[]; onDelete: (key: string) => void }) {
+  const [openKey, setOpenKey] = useState<string | null>(null)
   if (items.length === 0) return null
   return (
     <div className="mb-1">
       <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-stone-400 text-center">{title}</p>
       {items.map((item) => (
-        <div key={item.key} className="px-3 py-2 rounded-lg hover:bg-stone-50">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-sm font-medium text-stone-900">{item.content}</span>
-            {item.pos && (
-              <span className="text-xs text-stone-400 italic">{item.pos}</span>
-            )}
-            {item.zh_definition && (
-              <span className="text-xs text-stone-500">{item.zh_definition}</span>
-            )}
-          </div>
-          {item.example && (
-            <div className="mt-1 space-y-0.5">
-              <p className="text-xs text-stone-400 italic leading-snug">"{item.example}"</p>
-              {item.zh_example && (
-                <p className="text-xs text-stone-300 leading-snug">{item.zh_example}</p>
-              )}
-            </div>
-          )}
-        </div>
+        <VocabItem key={item.key} item={item} openKey={openKey} setOpenKey={setOpenKey} onDelete={onDelete} />
       ))}
+    </div>
+  )
+}
+
+function VocabItem({ item, openKey, setOpenKey, onDelete }: {
+  item: VocabListItem
+  openKey: string | null
+  setOpenKey: (key: string | null) => void
+  onDelete: (key: string) => void
+}) {
+  const isOpen = openKey === item.key
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleOutside(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setOpenKey(null)
+    }
+    document.addEventListener("mousedown", handleOutside)
+    return () => document.removeEventListener("mousedown", handleOutside)
+  }, [isOpen, setOpenKey])
+
+  return (
+    <div className="group relative px-3 py-2 rounded-lg hover:bg-stone-50">
+      <div ref={menuRef} className="absolute right-2 top-2">
+        <button
+          onClick={(e) => { e.stopPropagation(); setOpenKey(isOpen ? null : item.key) }}
+          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-stone-200 text-stone-400 hover:text-stone-600 transition-opacity"
+        >
+          <MoreVertical className="w-3.5 h-3.5" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-md ring-1 ring-stone-900/10 py-1 min-w-[190px] whitespace-nowrap">
+            <a
+              href={`https://en.wiktionary.org/wiki/${encodeURIComponent(item.content)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
+              onClick={() => setOpenKey(null)}
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-stone-400" />
+              Look up on Wiktionary
+            </a>
+            <a
+              href={`https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(item.content)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
+              onClick={() => setOpenKey(null)}
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-stone-400" />
+              Look up on Cambridge
+            </a>
+            <a
+              href={`https://www.ldoceonline.com/dictionary/${encodeURIComponent(item.content)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
+              onClick={() => setOpenKey(null)}
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-stone-400" />
+              Look up on Longman
+            </a>
+            <button
+              onClick={() => { onDelete(item.key); setOpenKey(null) }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-stone-50"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              移除
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        <span className="text-sm font-medium text-stone-900">{item.content}</span>
+        {item.pos && <span className="text-xs text-stone-400 italic">{item.pos}</span>}
+        {item.zh_definition && <span className="text-xs text-stone-500">{item.zh_definition}</span>}
+      </div>
+      {item.example ? (
+        <div className="mt-1 space-y-0.5">
+          <p className="text-xs text-stone-400 italic leading-snug">"{item.example}"</p>
+          {item.zh_example && <p className="text-xs text-stone-300 leading-snug">{item.zh_example}</p>}
+        </div>
+      ) : item.loadingExample ? (
+        <div className="mt-1 flex items-center gap-1.5">
+          <svg className="w-3 h-3 animate-spin text-stone-300 shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <span className="text-xs text-stone-300">加载例句…</span>
+        </div>
+      ) : null}
     </div>
   )
 }

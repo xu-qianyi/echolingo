@@ -12,6 +12,8 @@ interface Props {
   anchorRect: DOMRect
   onClose: () => void
   youtubeId?: string
+  onSaved?: (term: VocabTerm) => void
+  onExampleReady?: (term: VocabTerm) => void
 }
 
 type DetailState =
@@ -23,15 +25,34 @@ type SaveState = "idle" | "saving" | "saved" | "error"
 
 const clientCache = new Map<string, WordDefinition>()
 
-export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId }: Props) {
+const LS_PREFIX = "echolingo:def:"
+
+function lsGet(word: string): WordDefinition | null {
+  try { const raw = localStorage.getItem(LS_PREFIX + word); return raw ? JSON.parse(raw) : null }
+  catch { return null }
+}
+
+function lsSet(word: string, def: WordDefinition) {
+  try { localStorage.setItem(LS_PREFIX + word, JSON.stringify(def)) }
+  catch { /* localStorage full or unavailable */ }
+}
+
+export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId, onSaved, onExampleReady }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<DetailState>({ status: "loading" })
   const [saveState, setSaveState] = useState<SaveState>("idle")
+  const [pendingExample, setPendingExample] = useState(false)
 
   useEffect(() => {
     const lower = term.toLowerCase()
     if (clientCache.has(lower)) {
       setDetail({ status: "ok", data: clientCache.get(lower)! })
+      return
+    }
+    const stored = lsGet(lower)
+    if (stored) {
+      clientCache.set(lower, stored)
+      setDetail({ status: "ok", data: stored })
       return
     }
     setDetail({ status: "loading" })
@@ -42,6 +63,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId }: P
           setDetail({ status: "error" })
         } else {
           clientCache.set(lower, data)
+          lsSet(lower, data)
           setDetail({ status: "ok", data })
         }
       })
@@ -78,8 +100,22 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId }: P
   const example = detail.status === "ok" ? detail.data.example : null
   const zhExample = detail.status === "ok" ? detail.data.zh_example : null
 
+  useEffect(() => {
+    if (!pendingExample || detail.status !== "ok") return
+    onExampleReady?.({
+      term,
+      definition_zh: prefilled?.definition_zh ?? detail.data.zh_definition ?? "",
+      level: "",
+      pos: detail.data.pos,
+      example: detail.data.example,
+      zh_example: detail.data.zh_example,
+    })
+    setPendingExample(false)
+  }, [detail, pendingExample, onExampleReady, term, prefilled])
+
   const handleSave = async () => {
     if (!youtubeId || saveState === "saving" || saveState === "saved") return
+    const hasExample = detail.status === "ok"
     setSaveState("saving")
     try {
       const r = await fetch("/api/saved-items", {
@@ -95,7 +131,20 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId }: P
         }),
       })
       const data = await r.json()
-      setSaveState(data.error ? "error" : "saved")
+      if (data.error) {
+        setSaveState("error")
+      } else {
+        setSaveState("saved")
+        onSaved?.({
+          term,
+          definition_zh: definitionZh ?? "",
+          level: "",
+          pos: pos ?? "",
+          example: example ?? "",
+          zh_example: zhExample ?? "",
+        })
+        if (!hasExample) setPendingExample(true)
+      }
     } catch {
       setSaveState("error")
     }
