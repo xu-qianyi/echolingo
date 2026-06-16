@@ -160,7 +160,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId, onS
       <div className="flex items-start justify-between mb-3">
         <div>
           <span className="font-semibold text-stone-900 text-base">{term}</span>
-          {pos && <span className="ml-2 text-xs text-stone-400">{pos}</span>}
+          {pos && pos !== "phr." && <span className="ml-2 text-xs text-stone-400">{pos}</span>}
         </div>
         <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

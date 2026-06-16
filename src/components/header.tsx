@@ -40,7 +40,7 @@ export function Header() {
 
               {dropdownOpen && (
                 <div className="absolute right-0 mt-1 w-48 rounded-lg border border-stone-200 bg-white shadow-sm py-1 z-50">
-                  <div className="px-3 py-2 border-b border-stone-100">
+                  <div className="px-3 py-2 border-b border-transparent">
                     <p className="text-xs text-stone-500 truncate">{user.email}</p>
                   </div>
                   <button

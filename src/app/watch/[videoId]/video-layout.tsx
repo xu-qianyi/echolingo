@@ -498,7 +498,7 @@ function LearningText({
               onWordClick(chip.text, chip.vocabTerm, (e.currentTarget as HTMLElement).getBoundingClientRect())
             }}
             className={cn(
-              "rounded-md px-2 py-0.5 text-2xl font-medium transition-colors cursor-pointer",
+              "rounded-md px-2 py-0.5 text-xl font-medium transition-colors cursor-pointer",
               chip.vocabTerm
                 ? "bg-stone-200 text-stone-800 hover:bg-stone-300"
                 : "bg-stone-100 text-stone-700 hover:bg-stone-200"
@@ -509,7 +509,7 @@ function LearningText({
         ))}
       </div>
       {translation && (
-        <p className="mt-3 text-sm text-stone-400 leading-relaxed">{translation}</p>
+        <p className="mt-3 text-base text-stone-400 leading-relaxed">{translation}</p>
       )}
     </div>
   )
@@ -613,7 +613,7 @@ function VocabItem({ item, openKey, setOpenKey, onDelete }: {
 
       <div className="flex items-baseline gap-1.5 flex-wrap">
         <span className="text-sm font-medium text-stone-900">{item.content}</span>
-        {item.pos && <span className="text-xs text-stone-400 italic">{item.pos}</span>}
+        {item.pos && item.pos !== "phr." && <span className="text-xs text-stone-400 italic">{item.pos}</span>}
         {item.zh_definition && <span className="text-xs text-stone-500">{item.zh_definition}</span>}
       </div>
       {item.example ? (
