@@ -2,6 +2,9 @@ import { YoutubeTranscript } from "youtube-transcript"
 import { NextResponse } from "next/server"
 import type { CefrLevel } from "@/data/cefr-words"
 import { createClient } from "@/lib/supabase/server"
+import { getAdminClient } from "@/lib/supabase/admin"
+import { consumeQuotaForVideo } from "@/lib/quota"
+import { fetchVideoMeta } from "@/lib/youtube"
 
 export interface TranscriptSegment {
   text: string
@@ -188,6 +191,22 @@ export async function GET(req: Request, { params }: Params) {
     ? (rawLevel as CefrLevel)
     : "b1"
 
+  const admin = getAdminClient()
+
+  // Is this video already in the shared cache? Re-watching cached videos (e.g.
+  // from the homepage gallery) is always free; only loading a *new* one costs
+  // a daily-quota unit.
+  let existing: { id: string; title: string | null } | null = null
+  if (admin) {
+    const { data } = await admin
+      .from("videos")
+      .select("id, title")
+      .eq("youtube_id", videoId)
+      .maybeSingle()
+    existing = data
+  }
+  const alreadyCached = !!existing
+
   try {
     const raw = await YoutubeTranscript.fetchTranscript(videoId)
     const filtered = raw
@@ -197,10 +216,44 @@ export async function GET(req: Request, { params }: Params) {
     const grouped = groupIntoSegments(items, level)
     const segments = mergeShortSegments(grouped)
 
-    // Proactively ensure the video row exists so word-save doesn't need to write it
-    createClient().then((supabase) =>
-      supabase.from("videos").upsert({ youtube_id: videoId }, { onConflict: "youtube_id" })
-    ).catch(() => { /* non-critical */ })
+    if (!alreadyCached) {
+      // New video → enforce the daily quota, then cache it with metadata so it
+      // can appear in the gallery. Done only after the transcript loads, so a
+      // failed load never burns quota. The difficulty level (videos.cefr_level)
+      // is filled by the vocab route, which already runs an AI pass.
+      const quota = await consumeQuotaForVideo(videoId)
+      if (!quota.allowed) {
+        return NextResponse.json(
+          { error: "quota_exceeded", limit: quota.limit },
+          { status: 429 }
+        )
+      }
+      if (admin) {
+        const meta = await fetchVideoMeta(videoId)
+        await admin.from("videos").upsert(
+          {
+            youtube_id: videoId,
+            title: meta.title,
+            author_name: meta.author_name,
+            thumbnail_url: meta.thumbnail_url,
+          },
+          { onConflict: "youtube_id" }
+        )
+      } else {
+        // No service-role key configured — best-effort row create. Only the
+        // INSERT path is allowed by RLS (videos_insert, authenticated); this is
+        // reached only for a new (non-conflicting) row, so that's fine.
+        createClient().then((supabase) =>
+          supabase.from("videos").upsert({ youtube_id: videoId }, { onConflict: "youtube_id" })
+        ).catch(() => { /* non-critical */ })
+      }
+    } else if (admin && existing && !existing.title) {
+      // Backfill title/author/thumbnail for rows cached before metadata existed.
+      const meta = await fetchVideoMeta(videoId)
+      await admin.from("videos")
+        .update({ title: meta.title, author_name: meta.author_name, thumbnail_url: meta.thumbnail_url })
+        .eq("id", existing.id)
+    }
 
     return NextResponse.json({ segments })
   } catch (err) {

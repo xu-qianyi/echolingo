@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/auth-context"
 export function Header() {
   const { user, loading, signOut, showAuthModal } = useAuth()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -17,6 +18,14 @@ export function Header() {
     document.addEventListener("mousedown", onDown)
     return () => document.removeEventListener("mousedown", onDown)
   }, [])
+
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return }
+    fetch("/api/admin/status")
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(!!d.admin))
+      .catch(() => setIsAdmin(false))
+  }, [user])
 
   return (
     <header className="flex items-center justify-between h-12 px-4 shrink-0 bg-transparent">
@@ -43,6 +52,15 @@ export function Header() {
                   <div className="px-3 py-2 border-b border-transparent">
                     <p className="text-xs text-stone-500 truncate">{user.email}</p>
                   </div>
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex w-full items-center px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+                    >
+                      缓存后台
+                    </Link>
+                  )}
                   <button
                     onClick={() => { setDropdownOpen(false); signOut() }}
                     className="flex w-full items-center px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 transition-colors"

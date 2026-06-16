@@ -103,11 +103,15 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       .then((r) => r.json())
       .then((data) => {
         if (data.error) setTranscriptError(data.error)
-        else setSegments(data.segments)
+        else {
+          setSegments(data.segments)
+          // Only spend vocab tokens once the video has actually loaded (and
+          // wasn't blocked by the daily quota).
+          fetchVocab()
+        }
       })
       .catch(() => setTranscriptError("fetch_failed"))
       .finally(() => setIsLoading(false))
-    fetchVocab()
   }, [videoId, cefrLevel, fetchVocab])
 
   useEffect(() => {
@@ -286,9 +290,13 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       {!isLoading && transcriptError && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-50">
           <div className="bg-white rounded-2xl shadow-sm ring-1 ring-stone-900/5 px-10 py-10 max-w-md w-full mx-4 text-center">
-            <p className="text-lg font-bold text-stone-900 mb-3">无法分析该视频</p>
+            <p className="text-lg font-bold text-stone-900 mb-3">
+              {transcriptError === "quota_exceeded" ? "今日额度已用完" : "无法分析该视频"}
+            </p>
             <p className="text-sm text-stone-500 leading-relaxed mb-8">
-              {transcriptError === "no_transcript"
+              {transcriptError === "quota_exceeded"
+                ? "每天最多加载 3 个新视频。你仍可以在首页浏览已经加载好的视频，或明天再来。"
+                : transcriptError === "no_transcript"
                 ? "该视频没有可用的字幕，可能未开启字幕功能。请换一个有字幕的视频试试。"
                 : "字幕加载失败，请检查网络后重试。"}
             </p>
@@ -299,12 +307,14 @@ export function VideoLayout({ videoId }: { videoId: string }) {
               >
                 返回首页
               </button>
-              <button
-                onClick={fetchTranscript}
-                className="px-5 py-2 rounded-full text-sm font-medium bg-stone-900 text-white hover:bg-stone-700 transition-colors"
-              >
-                重试
-              </button>
+              {transcriptError !== "quota_exceeded" && (
+                <button
+                  onClick={fetchTranscript}
+                  className="px-5 py-2 rounded-full text-sm font-medium bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+                >
+                  重试
+                </button>
+              )}
             </div>
           </div>
         </div>

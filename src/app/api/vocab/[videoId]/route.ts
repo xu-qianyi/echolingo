@@ -4,6 +4,7 @@ import { generateObject } from "ai"
 import { createModel, getProviderFromHeader } from "@/lib/ai-provider"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { getAdminClient } from "@/lib/supabase/admin"
 import { fetchPhonetic } from "@/lib/dictionary"
 
 export interface VocabTerm {
@@ -17,6 +18,9 @@ export interface VocabTerm {
 }
 
 const schema = z.object({
+  video_level: z.enum(["a1", "a2", "b1", "b2", "c1"]).describe(
+    "the OVERALL CEFR difficulty of the whole video for a listener — based on vocabulary, sentence complexity and speaking pace. Judge the video itself, independent of the target student level mentioned above."
+  ),
   terms: z.array(z.object({
     term: z.string().describe("the exact word or phrase as it appears in the transcript, lowercase"),
     definition_zh: z.string().describe("concise Chinese definition, 4-12 characters"),
@@ -48,9 +52,11 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ terms: memCache.get(cacheKey) })
   }
 
-  // L2: database (persists across restarts and deployments)
+  // L2: database (persists across restarts and deployments). Prefer the
+  // service-role client so reads/writes work for anonymous viewers too (the
+  // study_notes RLS insert policy requires auth); fall back to the SSR client.
   try {
-    const supabase = await createClient()
+    const supabase = getAdminClient() ?? (await createClient())
     const { data: video } = await supabase
       .from("videos")
       .select("id")
@@ -117,11 +123,13 @@ ${fullText.slice(0, 8000)}`,
 
     memCache.set(cacheKey, terms)
 
-    // Persist to DB (non-critical)
-    createClient().then(async (supabase) => {
+    // Persist to DB (non-critical). Service-role client bypasses the
+    // auth-only insert policy so the cache fills for anonymous viewers too.
+    ;(async () => {
+      const supabase = getAdminClient() ?? (await createClient())
       const { data: video } = await supabase
         .from("videos")
-        .select("id")
+        .select("id, cefr_level")
         .eq("youtube_id", videoId)
         .single()
       if (!video) return
@@ -131,7 +139,12 @@ ${fullText.slice(0, 8000)}`,
           { video_id: video.id, cefr_level: level, content: { terms } },
           { onConflict: "video_id,cefr_level" }
         )
-    }).catch(() => { /* non-critical */ })
+      // Store the video's overall difficulty once (the AI judged it above).
+      // Only set when missing so it stays stable across learner levels.
+      if (!video.cefr_level) {
+        await supabase.from("videos").update({ cefr_level: object.video_level }).eq("id", video.id)
+      }
+    })().catch(() => { /* non-critical */ })
 
     return NextResponse.json({ terms })
   } catch (err) {
