@@ -4,6 +4,7 @@ import { generateObject } from "ai"
 import { createModel, getProviderFromHeader } from "@/lib/ai-provider"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { fetchPhonetic } from "@/lib/dictionary"
 
 export interface VocabTerm {
   term: string
@@ -12,6 +13,7 @@ export interface VocabTerm {
   pos: string
   example: string
   zh_example: string
+  phonetic?: string
 }
 
 const schema = z.object({
@@ -108,7 +110,12 @@ Transcript:
 ${fullText.slice(0, 8000)}`,
     })
 
-    memCache.set(cacheKey, object.terms)
+    const phonetics = await Promise.all(object.terms.map((t) => fetchPhonetic(t.term)))
+    const terms: VocabTerm[] = object.terms.map((t, i) => ({
+      ...t, ...(phonetics[i] ? { phonetic: phonetics[i]! } : {}),
+    }))
+
+    memCache.set(cacheKey, terms)
 
     // Persist to DB (non-critical)
     createClient().then(async (supabase) => {
@@ -121,12 +128,12 @@ ${fullText.slice(0, 8000)}`,
       await supabase
         .from("study_notes")
         .upsert(
-          { video_id: video.id, cefr_level: level, content: { terms: object.terms } },
+          { video_id: video.id, cefr_level: level, content: { terms } },
           { onConflict: "video_id,cefr_level" }
         )
     }).catch(() => { /* non-critical */ })
 
-    return NextResponse.json({ terms: object.terms })
+    return NextResponse.json({ terms })
   } catch (err) {
     console.error("[vocab]", err)
     return NextResponse.json({ error: "ai_failed" }, { status: 500 })

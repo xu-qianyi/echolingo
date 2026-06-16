@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown, ChevronUp, ExternalLink, Languages, MessageSquare, MoreVertical, PenLine, Search, Trash2, X } from "lucide-react"
+import { ChevronDown, ChevronUp, Eye, EyeOff, ExternalLink, Languages, MessageSquare, MoreVertical, PenLine, Search, Trash2, X } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 import { useRouter } from "next/navigation"
 import { useYouTubePlayer } from "@/hooks/use-youtube-player"
@@ -68,6 +68,7 @@ export function VideoLayout({ videoId }: { videoId: string }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [matchIdx, setMatchIdx] = useState(0)
+  const [hideTranslation, setHideTranslation] = useState(false)
 
   const segmentRefs = useRef<(HTMLDivElement | null)[]>([])
   const lastActiveIdx = useRef(-1)
@@ -232,6 +233,7 @@ export function VideoLayout({ videoId }: { videoId: string }) {
       content: t.term,
       zh_definition: t.definition_zh,
       pos: t.pos as string | undefined,
+      phonetic: t.phonetic || null,
       isPhrase: t.term.includes(" "),
       example: t.example || null,
       zh_example: t.zh_example || null,
@@ -551,8 +553,24 @@ export function VideoLayout({ videoId }: { videoId: string }) {
               </div>
             ) : (
               <>
-                <VocabSection title="Vocabulary" items={filteredVocab.filter((i) => !i.isPhrase)} onDelete={handleDeleteVocab} />
-                <VocabSection title="Short Phrases" items={filteredVocab.filter((i) => i.isPhrase)} onDelete={handleDeleteVocab} />
+                {filteredVocab.length > 0 && (
+                  <div className="sticky top-0 z-10 bg-white px-3 pb-1 flex justify-end">
+                    <button
+                      onClick={() => setHideTranslation((v) => !v)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                        hideTranslation
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "border-stone-200 text-stone-500 hover:border-stone-400"
+                      )}
+                    >
+                      {hideTranslation ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      隐藏翻译
+                    </button>
+                  </div>
+                )}
+                <VocabSection title="Vocabulary" items={filteredVocab.filter((i) => !i.isPhrase)} onDelete={handleDeleteVocab} hideTranslation={hideTranslation} />
+                <VocabSection title="Short Phrases" items={filteredVocab.filter((i) => i.isPhrase)} onDelete={handleDeleteVocab} hideTranslation={hideTranslation} />
               </>
             )}
           </div>
@@ -644,30 +662,32 @@ type VocabListItem = {
   content: string
   zh_definition: string | null
   pos: string | undefined
+  phonetic: string | null
   isPhrase: boolean
   example: string | null
   zh_example: string | null
   loadingExample: boolean
 }
 
-function VocabSection({ title, items, onDelete }: { title: string; items: VocabListItem[]; onDelete: (key: string) => void }) {
+function VocabSection({ title, items, onDelete, hideTranslation }: { title: string; items: VocabListItem[]; onDelete: (key: string) => void; hideTranslation: boolean }) {
   const [openKey, setOpenKey] = useState<string | null>(null)
   if (items.length === 0) return null
   return (
     <div className="mb-1">
       <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-stone-400 text-center">{title}</p>
       {items.map((item) => (
-        <VocabItem key={item.key} item={item} openKey={openKey} setOpenKey={setOpenKey} onDelete={onDelete} />
+        <VocabItem key={item.key} item={item} openKey={openKey} setOpenKey={setOpenKey} onDelete={onDelete} hideTranslation={hideTranslation} />
       ))}
     </div>
   )
 }
 
-function VocabItem({ item, openKey, setOpenKey, onDelete }: {
+function VocabItem({ item, openKey, setOpenKey, onDelete, hideTranslation }: {
   item: VocabListItem
   openKey: string | null
   setOpenKey: (key: string | null) => void
   onDelete: (key: string) => void
+  hideTranslation: boolean
 }) {
   const isOpen = openKey === item.key
   const menuRef = useRef<HTMLDivElement>(null)
@@ -735,13 +755,22 @@ function VocabItem({ item, openKey, setOpenKey, onDelete }: {
 
       <div className="flex items-baseline gap-1.5 flex-wrap">
         <span className="text-sm font-medium text-stone-900">{item.content}</span>
+        {item.phonetic && <span className="text-xs text-stone-400">/{item.phonetic.replace(/^\/|\/$/g, "")}/</span>}
         {item.pos && item.pos !== "phr." && <span className="text-xs text-stone-400 italic">{item.pos}</span>}
-        {item.zh_definition && <span className="text-xs text-stone-500">{item.zh_definition}</span>}
+        {item.zh_definition && (
+          <span className={cn("text-xs text-stone-500", hideTranslation && "blur-sm select-none")}>
+            {item.zh_definition}
+          </span>
+        )}
       </div>
       {item.example ? (
         <div className="mt-1 space-y-0.5">
           <p className="text-xs text-stone-400 italic leading-snug">"{item.example}"</p>
-          {item.zh_example && <p className="text-xs text-stone-300 leading-snug">{item.zh_example}</p>}
+          {item.zh_example && (
+            <p className={cn("text-xs text-stone-300 leading-snug", hideTranslation && "blur-sm select-none")}>
+              {item.zh_example}
+            </p>
+          )}
         </div>
       ) : item.loadingExample ? (
         <div className="mt-1 flex items-center gap-1.5">

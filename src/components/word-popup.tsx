@@ -97,6 +97,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId, onS
     ?? (detail.status === "ok" ? detail.data.zh_definition : null)
 
   const pos = detail.status === "ok" ? detail.data.pos : null
+  const phonetic = detail.status === "ok" ? detail.data.phonetic : null
   const example = detail.status === "ok" ? detail.data.example : null
   const zhExample = detail.status === "ok" ? detail.data.zh_example : null
 
@@ -109,6 +110,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId, onS
       pos: detail.data.pos,
       example: detail.data.example,
       zh_example: detail.data.zh_example,
+      phonetic: detail.data.phonetic,
     })
     setPendingExample(false)
   }, [detail, pendingExample, onExampleReady, term, prefilled])
@@ -142,6 +144,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId, onS
           pos: pos ?? "",
           example: example ?? "",
           zh_example: zhExample ?? "",
+          phonetic: phonetic ?? undefined,
         })
         if (!hasExample) setPendingExample(true)
       }
@@ -160,6 +163,7 @@ export function WordPopup({ term, prefilled, anchorRect, onClose, youtubeId, onS
       <div className="flex items-start justify-between mb-3">
         <div>
           <span className="font-semibold text-stone-900 text-base">{term}</span>
+          {phonetic && <span className="ml-2 text-xs text-stone-400">/{phonetic.replace(/^\/|\/$/g, "")}/</span>}
           {pos && pos !== "phr." && <span className="ml-2 text-xs text-stone-400">{pos}</span>}
         </div>
         <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors">

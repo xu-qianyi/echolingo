@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { generateObject } from "ai"
 import { createModel, getProviderFromHeader } from "@/lib/ai-provider"
+import { extractPhonetic } from "@/lib/dictionary"
 import { z } from "zod"
 
 export interface WordDefinition {
@@ -9,6 +10,7 @@ export interface WordDefinition {
   zh_definition: string
   example: string
   zh_example: string
+  phonetic?: string
 }
 
 // In-memory cache — resets on cold start, fine for MVP
@@ -72,8 +74,10 @@ export async function GET(req: Request, { params }: Params) {
   try {
     const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(lower)}`)
     if (dictRes.ok) {
-      const parsed = parseFreeDictResponse(await dictRes.json())
+      const dictData = await dictRes.json()
+      const parsed = parseFreeDictResponse(dictData)
       if (parsed) {
+        const phonetic = extractPhonetic(dictData)
         const exampleText = parsed.example || `Use "${lower}" in a sentence.`
         const { object } = await generateObject({
           model: createModel(apiKey, getProviderFromHeader(req)),
@@ -84,7 +88,9 @@ Definition: "${parsed.definition}"
 Example: "${exampleText}"
 zh_definition: 2–8 chars, natural Chinese. zh_example: accurate translation.`,
         })
-        const result: WordDefinition = { word: lower, pos: parsed.pos, example: parsed.example, ...object }
+        const result: WordDefinition = {
+          word: lower, pos: parsed.pos, example: parsed.example, ...(phonetic ? { phonetic } : {}), ...object,
+        }
         cache.set(lower, result)
         return NextResponse.json(result)
       }
