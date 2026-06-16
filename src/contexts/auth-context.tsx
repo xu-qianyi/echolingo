@@ -9,7 +9,6 @@ interface AuthContextValue {
   loading: boolean
   signInWithGoogle: (next?: string) => Promise<void>
   signInWithEmail: (email: string, next?: string) => Promise<{ error: string | null }>
-  verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   /** Call to require login before an action. Opens modal if not authed, returns true if already authed. */
   requireAuth: (onSuccess?: () => void) => boolean
@@ -65,12 +64,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null }
   }, [])
 
-  const verifyOtp = useCallback(async (email: string, token: string) => {
-    const supabase = createClient()
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" })
-    return { error: error?.message ?? null }
-  }, [])
-
   const signOut = useCallback(async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -89,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, loading,
-      signInWithGoogle, signInWithEmail, verifyOtp, signOut,
+      signInWithGoogle, signInWithEmail, signOut,
       requireAuth,
       showAuthModal: () => setAuthModalOpen(true),
       hideAuthModal: () => { setAuthModalOpen(false); setPendingAction(null) },

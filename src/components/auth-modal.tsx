@@ -1,35 +1,26 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 
 export function AuthModal() {
-  const { authModalOpen, hideAuthModal, signInWithGoogle, signInWithEmail, verifyOtp } = useAuth()
+  const { authModalOpen, hideAuthModal, signInWithGoogle, signInWithEmail } = useAuth()
   const [email, setEmail] = useState("")
-  const [codeSent, setCodeSent] = useState(false)
-  const [code, setCode] = useState("")
+  const [linkSent, setLinkSent] = useState(false)
   const [emailError, setEmailError] = useState("")
-  const [codeError, setCodeError] = useState("")
   const [emailLoading, setEmailLoading] = useState(false)
-  const [codeLoading, setCodeLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const codeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (authModalOpen) {
       setEmail("")
-      setCodeSent(false)
-      setCode("")
+      setLinkSent(false)
       setEmailError("")
-      setCodeError("")
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [authModalOpen])
-
-  useEffect(() => {
-    if (codeSent) setTimeout(() => codeRef.current?.focus(), 50)
-  }, [codeSent])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -49,18 +40,7 @@ export function AuthModal() {
     const { error } = await signInWithEmail(email.trim(), window.location.pathname)
     setEmailLoading(false)
     if (error) setEmailError(error)
-    else setCodeSent(true)
-  }
-
-  async function handleCodeSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (code.length !== 6) return
-    setCodeLoading(true)
-    setCodeError("")
-    const { error } = await verifyOtp(email.trim(), code.trim())
-    setCodeLoading(false)
-    if (error) { setCodeError("验证码错误，请重试"); setCode("") }
-    // on success, onAuthStateChange closes the modal automatically
+    else setLinkSent(true)
   }
 
   return (
@@ -88,43 +68,23 @@ export function AuthModal() {
           <p className="mt-1 text-sm text-stone-500">保存词汇和笔记需要登录</p>
         </div>
 
-        {codeSent ? (
+        {linkSent ? (
           <div>
-            <p className="text-sm text-stone-500 mb-4">
-              验证码已发送至 <span className="text-stone-700 font-medium">{email}</span>
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-stone-100">
+              <svg className="h-5 w-5 text-stone-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <p className="text-sm text-stone-700 font-medium">登录链接已发送</p>
+            <p className="mt-1 text-sm text-stone-500">
+              我们向 <span className="text-stone-700 font-medium">{email}</span> 发送了一封邮件，点击其中的链接即可完成登录。链接 1 小时内有效。
             </p>
-            <form onSubmit={handleCodeSubmit} className="space-y-2">
-              <input
-                ref={codeRef}
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={code}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\D/g, "").slice(0, 6)
-                  setCode(v)
-                }}
-                placeholder="6位验证码"
-                className="w-full h-11 rounded-lg border border-stone-200 px-3 text-center text-lg tracking-widest text-stone-900 placeholder:text-stone-400 placeholder:text-sm placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-stone-900 focus:border-transparent"
-              />
-              {codeError && <p className="text-xs text-red-500">{codeError}</p>}
-              <button
-                type="submit"
-                disabled={code.length !== 6 || codeLoading}
-                className={cn(
-                  "w-full h-11 rounded-lg text-sm font-medium transition-colors",
-                  code.length === 6 && !codeLoading
-                    ? "bg-stone-900 text-white hover:bg-stone-700"
-                    : "bg-stone-100 text-stone-400 cursor-not-allowed"
-                )}
-              >
-                {codeLoading ? "验证中…" : "确认登录"}
-              </button>
-            </form>
+            <p className="mt-3 text-xs text-stone-400">
+              没收到？请检查垃圾邮件文件夹。
+            </p>
             <button
-              onClick={() => { setCodeSent(false); setCode(""); setCodeError("") }}
-              className="mt-3 w-full text-xs text-stone-400 hover:text-stone-600 transition-colors"
+              onClick={() => { setLinkSent(false); setEmailError("") }}
+              className="mt-4 w-full text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
               换一个邮箱 / 重新发送
             </button>
@@ -173,6 +133,26 @@ export function AuthModal() {
                 {emailLoading ? "发送中…" : "发送登录链接"}
               </button>
             </form>
+
+            {/* Consent */}
+            <p className="pt-1 text-center text-xs leading-relaxed text-stone-400">
+              继续即表示你同意我们的{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                className="text-stone-500 underline underline-offset-2 hover:text-stone-700"
+              >
+                服务条款
+              </Link>{" "}
+              和{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="text-stone-500 underline underline-offset-2 hover:text-stone-700"
+              >
+                隐私政策
+              </Link>
+            </p>
           </div>
         )}
       </div>
