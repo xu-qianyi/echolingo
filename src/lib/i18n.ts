@@ -48,6 +48,11 @@ export const translations = {
     gallery: {
       recommended: "推荐",
     },
+    footer: {
+      openSource: "开源",
+      terms: "服务条款",
+      privacy: "隐私政策",
+    },
     watch: {
       studyNotes: "学习笔记",
       transcriptLoading: "字幕加载中…",
@@ -141,8 +146,8 @@ export const translations = {
     },
     header: {
       cacheAdmin: "Cache admin",
-      logOut: "Log out",
-      logIn: "Log in",
+      logOut: "Sign out",
+      logIn: "Sign in",
     },
     settings: {
       title: "Learning settings",
@@ -170,6 +175,11 @@ export const translations = {
     gallery: {
       recommended: "Recommended",
     },
+    footer: {
+      openSource: "Open Source",
+      terms: "Terms of Service",
+      privacy: "Privacy Policy",
+    },
     watch: {
       studyNotes: "Study Notes",
       transcriptLoading: "Loading transcript…",
@@ -193,7 +203,7 @@ export const translations = {
       retry: "Retry",
       playToStart: "Play the video to start learning",
       tabTranscript: "Transcript",
-      tabCards: "Cards",
+      tabCards: "Study",
       tabChat: "AI Chat",
       vocabFailed: "Vocabulary analysis failed — the API quota may be used up.",
       reanalyze: "Re-analyze",

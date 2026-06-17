@@ -1,6 +1,7 @@
 import { UrlInput } from "@/components/url-input"
 import { LandingHeadline } from "@/components/landing-headline"
 import { VideoGallery, type GalleryVideo } from "@/components/video-gallery"
+import { Footer } from "@/components/footer"
 import { createClient } from "@/lib/supabase/server"
 
 async function loadedVideos(): Promise<GalleryVideo[]> {
@@ -22,12 +23,15 @@ export default async function Home() {
 
   return (
     <main className="flex-1 overflow-y-auto px-4">
-      <div className="flex flex-col items-center gap-8 w-full pt-16 pb-10">
-        <LandingHeadline />
-        <UrlInput />
-      </div>
+      <div className="flex min-h-full flex-col">
+        <div className="flex flex-col items-center gap-8 w-full pt-16 pb-10">
+          <LandingHeadline />
+          <UrlInput />
+        </div>
 
-      <VideoGallery videos={videos} />
+        <VideoGallery videos={videos} />
+        <Footer />
+      </div>
     </main>
   )
 }
