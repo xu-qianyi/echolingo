@@ -52,6 +52,11 @@ export const translations = {
       openSource: "开源",
       terms: "服务条款",
       privacy: "隐私政策",
+      feedback: "反馈意见",
+      feedbackTitle: "有想法或问题？",
+      feedbackDesc: "欢迎给我发邮件，我很乐意听取你的意见。",
+      copy: "复制",
+      copied: "已复制",
     },
     watch: {
       studyNotes: "学习笔记",
@@ -179,6 +184,11 @@ export const translations = {
       openSource: "Open Source",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
+      feedback: "Give feedback",
+      feedbackTitle: "Have feedback or a question?",
+      feedbackDesc: "Email me — I'd love to hear your thoughts.",
+      copy: "Copy",
+      copied: "Copied",
     },
     watch: {
       studyNotes: "Study Notes",
