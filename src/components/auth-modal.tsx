@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
+import { useLanguage } from "@/contexts/language-context"
 import { cn } from "@/lib/utils"
 
 export function AuthModal() {
   const { authModalOpen, hideAuthModal, signInWithGoogle, signInWithEmail } = useAuth()
+  const { t } = useLanguage()
   const [email, setEmail] = useState("")
   const [linkSent, setLinkSent] = useState(false)
   const [emailError, setEmailError] = useState("")
@@ -64,8 +66,8 @@ export function AuthModal() {
         </button>
 
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-stone-900">登录 EchoLingo</h2>
-          <p className="mt-1 text-sm text-stone-500">保存词汇和笔记需要登录</p>
+          <h2 className="text-lg font-semibold text-stone-900">{t.auth.title}</h2>
+          <p className="mt-1 text-sm text-stone-500">{t.auth.subtitle}</p>
         </div>
 
         {linkSent ? (
@@ -75,18 +77,18 @@ export function AuthModal() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <p className="text-sm text-stone-700 font-medium">登录链接已发送</p>
+            <p className="text-sm text-stone-700 font-medium">{t.auth.linkSentTitle}</p>
             <p className="mt-1 text-sm text-stone-500">
-              我们向 <span className="text-stone-700 font-medium">{email}</span> 发送了一封邮件，点击其中的链接即可完成登录。链接 1 小时内有效。
+              {t.auth.linkSentPre}<span className="text-stone-700 font-medium">{email}</span>{t.auth.linkSentPost}
             </p>
             <p className="mt-3 text-xs text-stone-400">
-              没收到？请检查垃圾邮件文件夹。
+              {t.auth.checkSpam}
             </p>
             <button
               onClick={() => { setLinkSent(false); setEmailError("") }}
               className="mt-4 w-full text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
-              换一个邮箱 / 重新发送
+              {t.auth.changeEmail}
             </button>
           </div>
         ) : (
@@ -103,7 +105,7 @@ export function AuthModal() {
             {/* Divider */}
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-stone-200" />
-              <span className="text-xs text-stone-400">或用邮箱</span>
+              <span className="text-xs text-stone-400">{t.auth.orEmail}</span>
               <div className="flex-1 h-px bg-stone-200" />
             </div>
 
@@ -130,27 +132,27 @@ export function AuthModal() {
                     : "bg-stone-100 text-stone-400 cursor-not-allowed"
                 )}
               >
-                {emailLoading ? "发送中…" : "发送登录链接"}
+                {emailLoading ? t.auth.sending : t.auth.sendLink}
               </button>
             </form>
 
             {/* Consent */}
             <p className="pt-1 text-center text-xs leading-relaxed text-stone-400">
-              继续即表示你同意我们的{" "}
+              {t.auth.consentPre}{" "}
               <Link
                 href="/terms"
                 target="_blank"
                 className="text-stone-500 underline underline-offset-2 hover:text-stone-700"
               >
-                服务条款
+                {t.auth.terms}
               </Link>{" "}
-              和{" "}
+              {t.auth.consentAnd}{" "}
               <Link
                 href="/privacy"
                 target="_blank"
                 className="text-stone-500 underline underline-offset-2 hover:text-stone-700"
               >
-                隐私政策
+                {t.auth.privacy}
               </Link>
             </p>
           </div>
