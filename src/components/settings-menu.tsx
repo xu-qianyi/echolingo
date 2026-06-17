@@ -34,6 +34,7 @@ export function SettingsMenu() {
         title={t.settings.title}
       >
         <SlidersHorizontal className="w-3.5 h-3.5" />
+        <span className="text-xs font-medium">{t.settings.levelShort}</span>
         <span className="text-xs font-semibold uppercase">{cefrLevel}</span>
       </button>
 

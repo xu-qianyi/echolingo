@@ -75,7 +75,7 @@ export function Header() {
           ) : (
             <button
               onClick={showAuthModal}
-              className="h-8 px-3 rounded-md text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+              className="h-8 px-3 rounded-md text-xs font-medium bg-stone-900 text-white hover:bg-stone-700 transition-colors"
             >
               {t.header.logIn}
             </button>

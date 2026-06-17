@@ -24,6 +24,7 @@ export const translations = {
     },
     settings: {
       title: "学习设置",
+      levelShort: "等级",
       englishLevel: "英语水平",
       appLanguage: "界面语言",
       translationLanguage: "翻译显示为",
@@ -145,6 +146,7 @@ export const translations = {
     },
     settings: {
       title: "Learning settings",
+      levelShort: "Level",
       englishLevel: "English level",
       appLanguage: "App language",
       translationLanguage: "Translate into",

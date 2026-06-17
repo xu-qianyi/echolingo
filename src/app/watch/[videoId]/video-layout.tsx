@@ -361,18 +361,18 @@ export function VideoLayout({ videoId }: { videoId: string }) {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 gap-6 px-20 py-8 bg-stone-100/60">
+      <div className="flex flex-1 min-h-0 gap-4 px-20 py-6 bg-stone-100/60">
 
         {/* ── Left column ── */}
-        <div className="flex flex-col w-2/3 min-h-0 gap-6">
+        <div className="flex flex-col w-2/3 min-h-0 gap-4">
 
           {/* Video */}
-          <div className="w-full aspect-video rounded-2xl overflow-hidden bg-stone-900 shrink-0 shadow-sm ring-1 ring-stone-900/5">
+          <div className="w-full aspect-video rounded-2xl overflow-hidden bg-stone-900 shrink-0 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
             <div id={PLAYER_ID} className="w-full h-full" />
           </div>
 
           {/* Learning display */}
-          <div className="flex flex-col flex-1 min-h-0 rounded-2xl bg-white shadow-sm ring-1 ring-stone-900/5 overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0 rounded-2xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] overflow-hidden">
             <div className="flex-1 overflow-hidden flex flex-col justify-center px-8 py-6 gap-5">
               {!segments.length ? (
                 <p className="text-stone-300 text-xl">{t.watch.transcriptLoading}</p>
@@ -394,7 +394,7 @@ export function VideoLayout({ videoId }: { videoId: string }) {
         </div>
 
         {/* ── Right column ── */}
-        <div className="flex flex-col w-1/3 min-h-0 rounded-2xl bg-white shadow-sm ring-1 ring-stone-900/5 overflow-hidden">
+        <div className="flex flex-col w-1/3 min-h-0 rounded-2xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] overflow-hidden">
 
           {/* Tabs */}
           <div className="flex items-center gap-1 p-2 border-b border-stone-100 shrink-0">
