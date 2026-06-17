@@ -2,12 +2,15 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { LanguageSwitcher } from "./language-switcher"
+import { SettingsMenu } from "./settings-menu"
 import { useAuth } from "@/contexts/auth-context"
+import { useLanguage } from "@/contexts/language-context"
 
 export function Header() {
   const { user, loading, signOut, showAuthModal } = useAuth()
+  const { t } = useLanguage()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -18,6 +21,14 @@ export function Header() {
     return () => document.removeEventListener("mousedown", onDown)
   }, [])
 
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return }
+    fetch("/api/admin/status")
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(!!d.admin))
+      .catch(() => setIsAdmin(false))
+  }, [user])
+
   return (
     <header className="flex items-center justify-between h-12 px-4 shrink-0 bg-transparent">
       <Link href="/" className="text-sm font-semibold text-stone-900 tracking-tight">
@@ -25,7 +36,7 @@ export function Header() {
       </Link>
 
       <div className="flex items-center gap-2">
-        <LanguageSwitcher />
+        <SettingsMenu />
 
         {/* Auth area */}
         {!loading && (
@@ -43,11 +54,20 @@ export function Header() {
                   <div className="px-3 py-2 border-b border-transparent">
                     <p className="text-xs text-stone-500 truncate">{user.email}</p>
                   </div>
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex w-full items-center px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+                    >
+                      {t.header.cacheAdmin}
+                    </Link>
+                  )}
                   <button
                     onClick={() => { setDropdownOpen(false); signOut() }}
                     className="flex w-full items-center px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 transition-colors"
                   >
-                    退出登录
+                    {t.header.logOut}
                   </button>
                 </div>
               )}
@@ -55,9 +75,9 @@ export function Header() {
           ) : (
             <button
               onClick={showAuthModal}
-              className="h-8 px-3 rounded-md text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+              className="h-8 px-3 rounded-md text-xs font-medium bg-stone-900 text-white hover:bg-stone-700 transition-colors"
             >
-              登录
+              {t.header.logIn}
             </button>
           )
         )}

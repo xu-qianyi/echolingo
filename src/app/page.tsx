@@ -1,12 +1,36 @@
 import { UrlInput } from "@/components/url-input"
 import { LandingHeadline } from "@/components/landing-headline"
+import { VideoGallery, type GalleryVideo } from "@/components/video-gallery"
+import { Footer } from "@/components/footer"
+import { createClient } from "@/lib/supabase/server"
 
-export default function Home() {
+async function loadedVideos(): Promise<GalleryVideo[]> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from("videos")
+      .select("youtube_id, title, author_name, thumbnail_url, cefr_level")
+      .order("created_at", { ascending: false })
+      .limit(48)
+    return data ?? []
+  } catch {
+    return []
+  }
+}
+
+export default async function Home() {
+  const videos = await loadedVideos()
+
   return (
-    <main className="flex flex-1 flex-col items-center justify-center px-4">
-      <div className="flex flex-col items-center gap-8 w-full">
-        <LandingHeadline />
-        <UrlInput />
+    <main className="flex-1 overflow-y-auto px-4">
+      <div className="flex min-h-full flex-col">
+        <div className="flex flex-col items-center gap-8 w-full pt-16 pb-10">
+          <LandingHeadline />
+          <UrlInput />
+        </div>
+
+        <VideoGallery videos={videos} />
+        <Footer />
       </div>
     </main>
   )

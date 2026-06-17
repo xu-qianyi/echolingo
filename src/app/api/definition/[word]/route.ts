@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { generateObject } from "ai"
 import { createModel, getProviderFromHeader } from "@/lib/ai-provider"
 import { extractPhonetic } from "@/lib/dictionary"
+import { createClient } from "@/lib/supabase/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
 
 export interface WordDefinition {
@@ -57,6 +59,26 @@ const fullSchema = z.object({
   zh_example: z.string().describe("accurate Chinese translation of the example sentence"),
 })
 
+// Persist to the shared definitions table (non-critical, fire-and-forget).
+// Insert-only (ON CONFLICT DO NOTHING) so it never needs an UPDATE policy.
+function persist(supabase: SupabaseClient | undefined, def: WordDefinition) {
+  if (!supabase) return
+  supabase
+    .from("definitions")
+    .upsert(
+      {
+        word: def.word,
+        pos: def.pos,
+        zh_definition: def.zh_definition,
+        example: def.example,
+        zh_example: def.zh_example,
+        phonetic: def.phonetic ?? null,
+      },
+      { onConflict: "word", ignoreDuplicates: true }
+    )
+    .then(() => {}, () => { /* non-critical */ })
+}
+
 interface Params {
   params: Promise<{ word: string }>
 }
@@ -65,7 +87,29 @@ export async function GET(req: Request, { params }: Params) {
   const { word } = await params
   const lower = word.toLowerCase()
 
+  // L1: in-process cache (per serverless instance)
   if (cache.has(lower)) return NextResponse.json(cache.get(lower))
+
+  // L2: shared DB cache (survives cold starts, shared across users)
+  let supabase: SupabaseClient | undefined
+  try {
+    supabase = await createClient()
+    const { data } = await supabase.from("definitions").select("*").eq("word", lower).single()
+    if (data) {
+      const def: WordDefinition = {
+        word: data.word,
+        pos: data.pos,
+        zh_definition: data.zh_definition,
+        example: data.example,
+        zh_example: data.zh_example,
+        ...(data.phonetic ? { phonetic: data.phonetic } : {}),
+      }
+      cache.set(lower, def)
+      return NextResponse.json(def)
+    }
+  } catch {
+    // DB lookup non-critical — fall through to dictionary/AI
+  }
 
   const apiKey = req.headers.get("X-User-Api-Key") || process.env.GOOGLE_GENERATIVE_AI_API_KEY
   if (!apiKey) return NextResponse.json({ error: "no_api_key" }, { status: 503 })
@@ -92,6 +136,7 @@ zh_definition: 2–8 chars, natural Chinese. zh_example: accurate translation.`,
           word: lower, pos: parsed.pos, example: parsed.example, ...(phonetic ? { phonetic } : {}), ...object,
         }
         cache.set(lower, result)
+        persist(supabase, result)
         return NextResponse.json(result)
       }
     }
@@ -112,6 +157,7 @@ Define "${lower}":
     })
     const result: WordDefinition = { word: lower, ...object }
     cache.set(lower, result)
+    persist(supabase, result)
     return NextResponse.json(result)
   } catch {
     return NextResponse.json({ error: "ai_failed" }, { status: 500 })

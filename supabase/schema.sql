@@ -73,3 +73,40 @@ CREATE POLICY "study_notes_update" ON study_notes
 CREATE POLICY "saved_items_all" ON saved_items
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+-- ── Shared AI caches (token savings) ────────────────────────────────────────
+-- Both are non-user-specific, level-independent caches. They deliberately have
+-- NO foreign key to `videos`, so they populate even for anonymous (lazy-auth)
+-- viewers — which is where most of the token savings come from.
+
+-- Sentence translations, keyed by content hash. Reusable across videos, users,
+-- and CEFR levels (a sentence's Chinese translation doesn't depend on level).
+CREATE TABLE IF NOT EXISTS segment_translations (
+  text_hash   TEXT PRIMARY KEY,        -- sha256(source_text)
+  source_text TEXT NOT NULL,
+  zh          TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Word / phrase definitions, keyed by lowercased term. Survives serverless cold
+-- starts and is shared across all users (the in-process cache resets per instance).
+CREATE TABLE IF NOT EXISTS definitions (
+  word          TEXT PRIMARY KEY,
+  pos           TEXT,
+  zh_definition TEXT,
+  example       TEXT,
+  zh_example    TEXT,
+  phonetic      TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE segment_translations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE definitions          ENABLE ROW LEVEL SECURITY;
+
+-- Public read + insert (no TO clause → applies to anon AND authenticated).
+-- This is what lets the cache fill for non-logged-in users. Insert-only writes
+-- (upsert uses ON CONFLICT DO NOTHING), so no UPDATE policy is needed.
+CREATE POLICY "segment_translations_select" ON segment_translations FOR SELECT USING (true);
+CREATE POLICY "segment_translations_insert" ON segment_translations FOR INSERT WITH CHECK (true);
+CREATE POLICY "definitions_select" ON definitions FOR SELECT USING (true);
+CREATE POLICY "definitions_insert" ON definitions FOR INSERT WITH CHECK (true);
