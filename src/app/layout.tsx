@@ -4,6 +4,7 @@ import { LanguageProvider } from "@/contexts/language-context"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { AuthModal } from "@/components/auth-modal"
+import { Onboarding } from "@/components/onboarding"
 import "./globals.css"
 
 const geist = Geist({
@@ -24,13 +25,14 @@ export default function RootLayout({
   return (
     <html lang="zh" className={`${geist.variable} h-full`}>
       <body className="h-full flex flex-col">
-        <LanguageProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <LanguageProvider>
             <Header />
             {children}
             <AuthModal />
-          </AuthProvider>
-        </LanguageProvider>
+            <Onboarding />
+          </LanguageProvider>
+        </AuthProvider>
       </body>
     </html>
   )
