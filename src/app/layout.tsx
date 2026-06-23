@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist } from "next/font/google"
+import { Inter } from "next/font/google"
 import { LanguageProvider } from "@/contexts/language-context"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
@@ -7,8 +7,8 @@ import { AuthModal } from "@/components/auth-modal"
 import { Onboarding } from "@/components/onboarding"
 import "./globals.css"
 
-const geist = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 })
 
@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="zh" className={`${geist.variable} h-full`}>
+    <html lang="zh" className={`${inter.variable} h-full`}>
       <body className="h-full flex flex-col">
         <AuthProvider>
           <LanguageProvider>
