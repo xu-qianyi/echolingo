@@ -1,4 +1,4 @@
--- Run this in the Supabase SQL editor to set up EchoLingo's schema.
+-- Run this in the Supabase SQL editor to set up Fluvient's schema.
 
 -- Videos (shared cache, populated when any user loads a video)
 CREATE TABLE IF NOT EXISTS videos (

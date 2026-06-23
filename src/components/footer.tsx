@@ -6,7 +6,7 @@ import { Check, Copy } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 import { Modal } from "@/components/ui/modal"
 
-const REPO_URL = "https://github.com/xu-qianyi/echolingo"
+const REPO_URL = "https://github.com/xu-qianyi/fluvient"
 const FEEDBACK_EMAIL = "martta.xu@outlook.com"
 
 export function Footer() {
