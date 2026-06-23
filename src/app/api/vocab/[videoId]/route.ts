@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { generateObject } from "ai"
 import { runWithModelFallback, getProviderFromHeader } from "@/lib/ai-provider"
 import { z } from "zod"
+import { CATEGORIES } from "@/lib/categories"
 import { createClient } from "@/lib/supabase/server"
 import { getAdminClient } from "@/lib/supabase/admin"
 import { fetchPhonetic } from "@/lib/dictionary"
@@ -30,6 +31,9 @@ export interface ExpressionCard {
 const schema = z.object({
   video_level: z.enum(["a1", "a2", "b1", "b2", "c1"]).describe(
     "the OVERALL CEFR difficulty of the whole video for a listener — based on vocabulary, sentence complexity and speaking pace. Judge the video itself, independent of the target student level mentioned above."
+  ),
+  category: z.enum(CATEGORIES).describe(
+    "the single best content topic for this video, used for the homepage filter tags. Pick the most fitting one; use 'other' only when none clearly applies."
   ),
   terms: z.array(z.object({
     term: z.string().describe("the exact word or phrase as it appears in the transcript, lowercase"),
@@ -181,7 +185,7 @@ ${fullText.slice(0, 8000)}`,
       const supabase = getAdminClient() ?? (await createClient())
       const { data: video } = await supabase
         .from("videos")
-        .select("id, cefr_level")
+        .select("id, cefr_level, category")
         .eq("youtube_id", videoId)
         .single()
       if (!video) return
@@ -191,10 +195,13 @@ ${fullText.slice(0, 8000)}`,
           { video_id: video.id, cefr_level: level, content: { terms, expressions } },
           { onConflict: "video_id,cefr_level" }
         )
-      // Store the video's overall difficulty once (the AI judged it above).
-      // Only set when missing so it stays stable across learner levels.
-      if (!video.cefr_level) {
-        await supabase.from("videos").update({ cefr_level: object.video_level }).eq("id", video.id)
+      // Store the video's overall difficulty + topic once (the AI judged them
+      // above). Only set when missing so they stay stable across learner levels.
+      const fill: { cefr_level?: string; category?: string } = {}
+      if (!video.cefr_level) fill.cefr_level = object.video_level
+      if (!video.category) fill.category = object.category
+      if (Object.keys(fill).length) {
+        await supabase.from("videos").update(fill).eq("id", video.id)
       }
     })().catch(() => { /* non-critical */ })
 
